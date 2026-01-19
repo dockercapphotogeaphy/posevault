@@ -13,6 +13,7 @@ export default function ImageCard({
   onStartBulkSelect
 }) {
   const [showMenu, setShowMenu] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const menuRef = useRef(null);
   const longPressTimerRef = useRef(null);
   const longPressTriggeredRef = useRef(false);
@@ -172,7 +173,7 @@ export default function ImageCard({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDelete(index);
+                    setShowDeleteConfirm(true);
                     setShowMenu(false);
                   }}
                   className="w-full px-4 py-2 text-sm text-left hover:bg-gray-600 transition-colors flex items-center gap-2 cursor-pointer text-red-400"
@@ -184,6 +185,43 @@ export default function ImageCard({
             )}
           </div>
         </>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-red-600 rounded-full">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold">Delete Pose?</h3>
+                <p className="text-sm text-gray-400">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to permanently delete this pose?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  onDelete(index);
+                  setShowDeleteConfirm(false);
+                }}
+                className="flex-1 bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors cursor-pointer"
+              >
+                Delete Pose
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

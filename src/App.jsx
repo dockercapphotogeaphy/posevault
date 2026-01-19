@@ -220,9 +220,25 @@ export default function PhotographyPoseGuide() {
     }
 
     bulkUpdateImages(currentCategory.id, selectedImages, bulkUpdates);
-    
+
     setBulkSelectMode(false);
     setSelectedImages([]);
+  };
+
+  const handleBulkDelete = () => {
+    if (!currentCategory) return;
+
+    // Sort indices in descending order to avoid index shifts during deletion
+    const sortedIndices = [...selectedImages].sort((a, b) => b - a);
+
+    // Delete each image
+    sortedIndices.forEach(index => {
+      deleteImage(currentCategory.id, index);
+    });
+
+    setBulkSelectMode(false);
+    setSelectedImages([]);
+    setShowBulkEditModal(false);
   };
 
   // Get current category data
@@ -429,6 +445,7 @@ export default function PhotographyPoseGuide() {
           allTags={allTags}
           onClose={() => setShowBulkEditModal(false)}
           onApply={handleBulkEdit}
+          onDelete={handleBulkDelete}
         />
       )}
     </div>
