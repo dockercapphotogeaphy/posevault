@@ -3,7 +3,7 @@ import { Heart, Grid3x3, ChevronDown, Filter, CheckSquare, FileText, Images } fr
 import ImageCard from './ImageCard';
 import { getGridColsClass } from '../utils/helpers';
 
-export default function ImageGrid({ 
+export default function ImageGrid({
   category,
   images,
   originalImages,
@@ -25,7 +25,8 @@ export default function ImageGrid({
   onImageClick,
   onToggleFavorite,
   onEditImage,
-  onDeleteImage
+  onDeleteImage,
+  onStartBulkSelect
 }) {
   const gridColsClass = getGridColsClass(gridColumns);
 
@@ -173,6 +174,7 @@ export default function ImageGrid({
                 onToggleFavorite={onToggleFavorite}
                 onEdit={onEditImage}
                 onDelete={onDeleteImage}
+                onStartBulkSelect={onStartBulkSelect}
               />
             );
           })}

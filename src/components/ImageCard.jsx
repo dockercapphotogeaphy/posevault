@@ -9,10 +9,13 @@ export default function ImageCard({
   onImageClick,
   onToggleFavorite,
   onEdit,
-  onDelete
+  onDelete,
+  onStartBulkSelect
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef(null);
+  const longPressTimerRef = useRef(null);
+  const longPressTriggeredRef = useRef(false);
 
   // Handle clicks outside to close the menu
   useEffect(() => {
@@ -28,12 +31,60 @@ export default function ImageCard({
     }
   }, [showMenu]);
 
+  // Long press handlers for mobile
+  const handleTouchStart = (e) => {
+    if (bulkSelectMode) return; // Don't trigger if already in bulk select mode
+
+    longPressTriggeredRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      // Trigger haptic feedback if available
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+      onStartBulkSelect(index);
+    }, 500); // 500ms long press
+  };
+
+  const handleTouchEnd = (e) => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+
+    // If long press was triggered, prevent the click event
+    if (longPressTriggeredRef.current) {
+      e.preventDefault();
+      longPressTriggeredRef.current = false;
+    }
+  };
+
+  const handleTouchMove = () => {
+    // Cancel long press if user moves finger
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+      }
+    };
+  }, []);
+
   return (
     <div className="relative group aspect-[3/4]">
       <img
         src={image.src}
         alt={`Pose ${index + 1}`}
         onClick={() => onImageClick(index)}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchMove={handleTouchMove}
         className={`w-full h-full object-cover rounded-lg cursor-pointer transition-all ${
           bulkSelectMode
             ? isSelected

@@ -331,6 +331,10 @@ export default function PhotographyPoseGuide() {
               setCurrentImageIndex(Math.max(0, currentImageIndex - 1));
             }
           }}
+          onStartBulkSelect={(index) => {
+            setBulkSelectMode(true);
+            setSelectedImages([index]);
+          }}
         />
       )}
 
