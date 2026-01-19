@@ -15,7 +15,9 @@ export default function ImageCard({
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showTagsModal, setShowTagsModal] = useState(false);
+  const [dropdownAlignRight, setDropdownAlignRight] = useState(false);
   const menuRef = useRef(null);
+  const menuButtonRef = useRef(null);
   const longPressTimerRef = useRef(null);
   const longPressTriggeredRef = useRef(false);
 
@@ -148,8 +150,15 @@ export default function ImageCard({
           {/* Three-dot menu button */}
           <div ref={menuRef} className="absolute top-2 right-2">
             <button
+              ref={menuButtonRef}
               onClick={(e) => {
                 e.stopPropagation();
+                // On mobile, check if button is on right side of screen
+                if (menuButtonRef.current && window.innerWidth < 768) {
+                  const rect = menuButtonRef.current.getBoundingClientRect();
+                  const screenMidpoint = window.innerWidth / 2;
+                  setDropdownAlignRight(rect.left > screenMidpoint);
+                }
                 setShowMenu(!showMenu);
               }}
               className="p-2 rounded-full bg-gray-800 bg-opacity-75 hover:bg-opacity-100 transition-all cursor-pointer"
@@ -159,7 +168,9 @@ export default function ImageCard({
 
             {/* Dropdown menu */}
             {showMenu && (
-              <div className="absolute left-0 md:left-auto md:right-0 mt-2 bg-gray-700 rounded-lg shadow-xl border border-gray-600 overflow-hidden min-w-[180px] z-20">
+              <div className={`absolute mt-2 bg-gray-700 rounded-lg shadow-xl border border-gray-600 overflow-hidden min-w-[180px] z-20 ${
+                dropdownAlignRight ? 'right-0' : 'left-0'
+              } md:left-auto md:right-0`}>
                 {image.tags && image.tags.length > 0 && (
                   <button
                     onClick={(e) => {
