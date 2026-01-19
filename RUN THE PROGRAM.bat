@@ -2,7 +2,7 @@
 cd /d "%~dp0"
 
 echo Installing dependencies...
-npm install
+call npm install
 IF %ERRORLEVEL% NEQ 0 (
   echo.
   echo npm install failed. Fix the errors above and try again.
@@ -12,6 +12,13 @@ IF %ERRORLEVEL% NEQ 0 (
 
 echo.
 echo Starting development server...
-npm run dev
+call npm run dev
+IF %ERRORLEVEL% NEQ 0 (
+  echo.
+  echo Development server failed to start or crashed.
+  echo Check the error messages above.
+  pause
+  exit /b %ERRORLEVEL%
+)
 
 pause
