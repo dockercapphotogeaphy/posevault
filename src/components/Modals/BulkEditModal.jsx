@@ -227,25 +227,16 @@ export default function BulkEditModal({
           </div>
         </div>
 
-        {/* Delete Section */}
-        <div className="mb-6 p-4 bg-red-900 bg-opacity-20 border border-red-600 rounded-lg">
-          <label className="flex items-center gap-2 text-sm font-semibold mb-2 text-red-400">
-            <Trash2 size={16} />
-            Delete Poses
-          </label>
-          <p className="text-sm text-gray-400 mb-3">
-            Permanently delete all {selectedCount} selected pose{selectedCount > 1 ? 's' : ''}. This action cannot be undone.
-          </p>
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="w-full bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
-          >
-            <Trash2 size={20} />
-            Delete {selectedCount} Pose{selectedCount > 1 ? 's' : ''}
-          </button>
-        </div>
-
         {/* Action Buttons */}
+        <button
+          onClick={() => setShowDeleteConfirm(true)}
+          className="w-full mb-3 bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
+        >
+          <Trash2 size={20} />
+          Delete {selectedCount} Pose{selectedCount > 1 ? 's' : ''}
+        </button>
+
+        {/* Apply/Cancel Buttons */}
         <div className="flex gap-3">
           <button
             onClick={onClose}
