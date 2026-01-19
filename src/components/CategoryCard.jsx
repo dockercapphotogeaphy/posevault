@@ -150,15 +150,12 @@ export default function CategoryCard({
                     category={category}
                     onEditSettings={(catId) => {
                       onEditSettings(catId);
-                      setShowDropdown(false);
                     }}
                     onUploadCover={(e, catId) => {
                       onUploadCover(e, catId);
-                      setShowDropdown(false);
                     }}
                     onDelete={(catId) => {
                       onDelete(catId);
-                      setShowDropdown(false);
                     }}
                     onClose={() => setShowDropdown(false)}
                   />
