@@ -17,6 +17,7 @@ export default function SingleImageView({
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
   const lastTouchDistanceRef = useRef(null);
   const lastTouchCenterRef = useRef(null);
+  const panStartPositionRef = useRef({ x: 0, y: 0 });
 
   if (!image) return null;
 
@@ -91,6 +92,15 @@ export default function SingleImageView({
         x: (touch1.clientX + touch2.clientX) / 2,
         y: (touch1.clientY + touch2.clientY) / 2
       };
+    } else if (e.touches.length === 1 && scale > 1) {
+      // Single touch while zoomed - prepare for panning
+      const touch = e.touches[0];
+      touchStartRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        time: Date.now()
+      };
+      panStartPositionRef.current = { ...position };
     }
   };
 
@@ -114,22 +124,16 @@ export default function SingleImageView({
       setScale(newScale);
       lastTouchDistanceRef.current = distance;
     } else if (e.touches.length === 1 && scale > 1) {
-      // Pan when zoomed in
+      // Pan when zoomed in - calculate cumulative delta from initial touch
       e.preventDefault();
       const touch = e.touches[0];
       const deltaX = touch.clientX - touchStartRef.current.x;
       const deltaY = touch.clientY - touchStartRef.current.y;
 
       setPosition({
-        x: position.x + deltaX,
-        y: position.y + deltaY
+        x: panStartPositionRef.current.x + deltaX,
+        y: panStartPositionRef.current.y + deltaY
       });
-
-      touchStartRef.current = {
-        x: touch.clientX,
-        y: touch.clientY,
-        time: Date.now()
-      };
     }
   };
 
