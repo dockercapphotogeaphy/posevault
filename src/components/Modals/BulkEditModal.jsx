@@ -1,17 +1,30 @@
 import React, { useState } from 'react';
 import { X, Tag, FileText, Heart, Plus } from 'lucide-react';
 
-export default function BulkEditModal({ 
+export default function BulkEditModal({
   selectedCount,
+  selectedImages,
   allTags,
-  onClose, 
-  onApply 
+  onClose,
+  onApply
 }) {
   const [bulkTagInput, setBulkTagInput] = useState('');
   const [bulkTagsToAdd, setBulkTagsToAdd] = useState([]);
   const [bulkNotes, setBulkNotes] = useState('');
   const [bulkNotesMode, setBulkNotesMode] = useState('append');
   const [bulkFavoriteAction, setBulkFavoriteAction] = useState('noChange');
+
+  // Extract unique existing tags from selected images
+  const existingTags = React.useMemo(() => {
+    if (!selectedImages || selectedImages.length === 0) return [];
+    const tagSet = new Set();
+    selectedImages.forEach(image => {
+      if (image.tags && Array.isArray(image.tags)) {
+        image.tags.forEach(tag => tagSet.add(tag));
+      }
+    });
+    return Array.from(tagSet).sort();
+  }, [selectedImages]);
 
   const handleApply = () => {
     onApply({
@@ -41,7 +54,7 @@ export default function BulkEditModal({
           <h2 className="text-xl font-bold">Bulk Edit {selectedCount} Image{selectedCount > 1 ? 's' : ''}</h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-700 rounded-lg transition-colors cursor-pointer"
           >
             <X size={24} />
           </button>
@@ -53,7 +66,7 @@ export default function BulkEditModal({
             <Tag size={16} />
             Add Tags to Selected Images
           </label>
-          
+
           <div className="relative">
             <div className="flex gap-2 mb-2">
               <input
@@ -76,12 +89,12 @@ export default function BulkEditModal({
                     setBulkTagInput('');
                   }
                 }}
-                className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg transition-colors"
+                className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg transition-colors cursor-pointer"
               >
                 <Plus size={20} />
               </button>
             </div>
-            
+
             {/* Autocomplete Suggestions Dropdown */}
             {bulkTagInput && suggestions.length > 0 && (
               <div className="absolute z-10 w-full bg-gray-700 rounded-lg shadow-xl border border-gray-600 max-h-48 overflow-y-auto mb-2">
@@ -92,7 +105,7 @@ export default function BulkEditModal({
                       setBulkTagsToAdd([...bulkTagsToAdd, tag]);
                       setBulkTagInput('');
                     }}
-                    className="w-full px-4 py-2 text-left hover:bg-gray-600 transition-colors flex items-center gap-2"
+                    className="w-full px-4 py-2 text-left hover:bg-gray-600 transition-colors flex items-center gap-2 cursor-pointer"
                   >
                     <Tag size={14} className="text-purple-400" />
                     <span>{tag}</span>
@@ -101,14 +114,30 @@ export default function BulkEditModal({
               </div>
             )}
           </div>
-          
+
+          {/* Existing tags section */}
+          {existingTags.length > 0 && (
+            <div className="mb-3">
+              <label className="text-xs font-semibold text-gray-400 mb-2 block">
+                Existing tags
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {existingTags.map((tag, i) => (
+                  <span key={i} className="bg-gray-600 text-white px-3 py-1 rounded-full text-sm">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2">
             {bulkTagsToAdd.map((tag, i) => (
               <span key={i} className="bg-purple-600 text-white px-3 py-1 rounded-full text-sm flex items-center gap-2">
                 {tag}
                 <button
                   onClick={() => setBulkTagsToAdd(bulkTagsToAdd.filter((_, idx) => idx !== i))}
-                  className="hover:bg-purple-700 rounded-full p-0.5"
+                  className="hover:bg-purple-700 rounded-full p-0.5 cursor-pointer"
                 >
                   <X size={14} />
                 </button>
@@ -129,7 +158,7 @@ export default function BulkEditModal({
           <div className="flex gap-2 mb-2">
             <button
               onClick={() => setBulkNotesMode('append')}
-              className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+              className={`flex-1 px-4 py-2 rounded-lg transition-colors cursor-pointer ${
                 bulkNotesMode === 'append'
                   ? 'bg-blue-600 hover:bg-blue-700'
                   : 'bg-gray-700 hover:bg-gray-600'
@@ -139,7 +168,7 @@ export default function BulkEditModal({
             </button>
             <button
               onClick={() => setBulkNotesMode('replace')}
-              className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+              className={`flex-1 px-4 py-2 rounded-lg transition-colors cursor-pointer ${
                 bulkNotesMode === 'replace'
                   ? 'bg-blue-600 hover:bg-blue-700'
                   : 'bg-gray-700 hover:bg-gray-600'
@@ -165,7 +194,7 @@ export default function BulkEditModal({
           <div className="flex gap-2">
             <button
               onClick={() => setBulkFavoriteAction('noChange')}
-              className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+              className={`flex-1 px-4 py-2 rounded-lg transition-colors cursor-pointer ${
                 bulkFavoriteAction === 'noChange'
                   ? 'bg-gray-600 hover:bg-gray-500'
                   : 'bg-gray-700 hover:bg-gray-600'
@@ -175,7 +204,7 @@ export default function BulkEditModal({
             </button>
             <button
               onClick={() => setBulkFavoriteAction('favorite')}
-              className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+              className={`flex-1 px-4 py-2 rounded-lg transition-colors cursor-pointer ${
                 bulkFavoriteAction === 'favorite'
                   ? 'bg-red-600 hover:bg-red-700'
                   : 'bg-gray-700 hover:bg-gray-600'
@@ -185,7 +214,7 @@ export default function BulkEditModal({
             </button>
             <button
               onClick={() => setBulkFavoriteAction('unfavorite')}
-              className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+              className={`flex-1 px-4 py-2 rounded-lg transition-colors cursor-pointer ${
                 bulkFavoriteAction === 'unfavorite'
                   ? 'bg-gray-600 hover:bg-gray-500'
                   : 'bg-gray-700 hover:bg-gray-600'
@@ -200,13 +229,13 @@ export default function BulkEditModal({
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg transition-colors"
+            className="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg transition-colors cursor-pointer"
           >
             Cancel
           </button>
           <button
             onClick={handleApply}
-            className="flex-1 bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg transition-colors"
+            className="flex-1 bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg transition-colors cursor-pointer"
           >
             Apply Changes
           </button>

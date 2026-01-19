@@ -37,7 +37,7 @@ export default function CategoryCard({
               e.stopPropagation();
               onToggleFavorite(category.id);
             }}
-            className="absolute top-2 right-2 p-2 rounded-full bg-gray-800 bg-opacity-75 hover:bg-opacity-100 transition-all z-10"
+            className="absolute top-2 right-2 p-2 rounded-full bg-gray-800 bg-opacity-75 hover:bg-opacity-100 transition-all z-10 cursor-pointer"
           >
             <Heart
               size={20}
@@ -55,12 +55,15 @@ export default function CategoryCard({
               className="w-full h-full object-cover rounded-t-xl"
             />
             {category.images.length > 0 && (
-              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all" />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all" />
             )}
           </div>
         </>
       ) : (
-        <div className="bg-gray-700 py-6 md:py-8 flex items-center justify-center gap-2 md:gap-3 aspect-[4/3] rounded-t-xl">
+        <div
+          onClick={() => category.images.length > 0 && onOpen(category)}
+          className={`bg-gray-700 py-6 md:py-8 flex items-center justify-center gap-2 md:gap-3 aspect-[4/3] rounded-t-xl ${category.images.length > 0 ? 'cursor-pointer hover:bg-gray-600' : ''} transition-colors`}
+        >
           <Camera size={20} className="text-gray-400 md:w-6 md:h-6" />
           <span className="text-gray-400 font-medium text-sm md:text-base">No Cover Photo</span>
         </div>
@@ -77,7 +80,7 @@ export default function CategoryCard({
                 e.stopPropagation();
                 onToggleFavorite(category.id);
               }}
-              className="p-1 hover:bg-gray-700 rounded-full transition-all flex-shrink-0"
+              className="p-1 hover:bg-gray-700 rounded-full transition-all flex-shrink-0 cursor-pointer"
             >
               <Heart
                 size={16}
@@ -135,7 +138,7 @@ export default function CategoryCard({
                   e.stopPropagation();
                   setShowDropdown(!showDropdown);
                 }}
-                className="p-1.5 md:p-2 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors relative z-10"
+                className="p-1.5 md:p-2 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors relative z-10 cursor-pointer"
               >
                 <Settings size={16} className="text-gray-300 md:w-5 md:h-5" />
               </button>
@@ -147,15 +150,12 @@ export default function CategoryCard({
                     category={category}
                     onEditSettings={(catId) => {
                       onEditSettings(catId);
-                      setShowDropdown(false);
                     }}
                     onUploadCover={(e, catId) => {
                       onUploadCover(e, catId);
-                      setShowDropdown(false);
                     }}
                     onDelete={(catId) => {
                       onDelete(catId);
-                      setShowDropdown(false);
                     }}
                     onClose={() => setShowDropdown(false)}
                   />
