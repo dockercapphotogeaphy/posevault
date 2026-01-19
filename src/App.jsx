@@ -10,7 +10,6 @@ import SingleImageView from './components/SingleImageView';
 // Modals
 import NewCategoryModal from './components/Modals/NewCategoryModal';
 import CategorySettingsModal from './components/Modals/CategorySettingsModal';
-import CategorySettingsDropdown from './components/Modals/CategorySettingsDropdown';
 import DeleteConfirmModal from './components/Modals/DeleteConfirmModal';
 import ImageEditModal from './components/Modals/ImageEditModal';
 import TagFilterModal from './components/Modals/TagFilterModal';
@@ -57,7 +56,6 @@ export default function PhotographyPoseGuide() {
 
   // Modals
   const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
-  const [showCategorySettings, setShowCategorySettings] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [editingImage, setEditingImage] = useState(null);
@@ -288,7 +286,7 @@ export default function PhotographyPoseGuide() {
           onOpenCategory={handleOpenCategory}
           onToggleFavorite={toggleCategoryFavorite}
           onUploadImages={handleImagesUpload}
-          onShowSettings={(catId) => setShowCategorySettings(showCategorySettings === catId ? null : catId)}
+          onEditSettings={(catId) => setEditingCategory(catId)}
           onUploadCover={handleCoverUpload}
           onDelete={(catId) => {
             setShowDeleteConfirm(catId);
@@ -356,25 +354,6 @@ export default function PhotographyPoseGuide() {
           }}
         />
       )}
-
-      {showCategorySettings && (() => {
-        const cat = categories.find(c => c.id === showCategorySettings);
-        return (
-          <CategorySettingsDropdown
-            category={cat}
-            onEditSettings={(catId) => {
-              setEditingCategory(catId);
-              setShowCategorySettings(null);
-            }}
-            onUploadCover={handleCoverUpload}
-            onDelete={(catId) => {
-              setShowDeleteConfirm(catId);
-              setShowCategorySettings(null);
-            }}
-            onClose={() => setShowCategorySettings(null)}
-          />
-        );
-      })()}
 
       {editingCategory && (() => {
         const cat = categories.find(c => c.id === editingCategory);
