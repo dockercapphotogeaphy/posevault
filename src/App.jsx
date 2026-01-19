@@ -289,6 +289,10 @@ export default function PhotographyPoseGuide() {
           onToggleFavorite={toggleCategoryFavorite}
           onUploadImages={handleImagesUpload}
           onShowSettings={(catId) => setShowCategorySettings(showCategorySettings === catId ? null : catId)}
+          onUploadCover={handleCoverUpload}
+          onDelete={(catId) => {
+            setShowDeleteConfirm(catId);
+          }}
         />
       )}
 

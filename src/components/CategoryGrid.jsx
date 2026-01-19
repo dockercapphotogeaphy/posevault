@@ -3,8 +3,8 @@ import { Heart, Grid3x3, ChevronDown } from 'lucide-react';
 import CategoryCard from './CategoryCard';
 import { getCategoryGridColsClass } from '../utils/helpers';
 
-export default function CategoryGrid({ 
-  categories, 
+export default function CategoryGrid({
+  categories,
   showFavoriteCategoriesOnly,
   categoryGridColumns,
   showCategoryGridDropdown,
@@ -15,7 +15,9 @@ export default function CategoryGrid({
   onOpenCategory,
   onToggleFavorite,
   onUploadImages,
-  onShowSettings
+  onShowSettings,
+  onUploadCover,
+  onDelete
 }) {
   const categoryGridColsClass = getCategoryGridColsClass(categoryGridColumns);
 
@@ -78,6 +80,8 @@ export default function CategoryGrid({
               onToggleFavorite={onToggleFavorite}
               onUploadImages={onUploadImages}
               onEditSettings={onShowSettings}
+              onUploadCover={onUploadCover}
+              onDelete={onDelete}
             />
           ))}
         </div>
