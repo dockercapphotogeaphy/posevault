@@ -134,16 +134,17 @@ export default function ImageGrid({
           </button>
 
           {showGridDropdown && (
-            <div className="absolute right-0 mt-2 bg-gray-800 rounded-lg shadow-xl border border-gray-700 overflow-hidden z-10">
+            <div className="absolute right-0 mt-2 bg-gray-800 rounded-lg shadow-xl border border-gray-700 overflow-hidden z-10 min-w-[120px]">
               {[2, 3, 4].map(cols => (
                 <button
                   key={cols}
                   onClick={() => onSetGridColumns(cols)}
-                  className={`w-full px-4 py-2 text-left hover:bg-gray-700 transition-colors cursor-pointer ${
+                  className={`w-full px-4 py-2 text-left hover:bg-gray-700 transition-colors cursor-pointer whitespace-nowrap ${
                     gridColumns === cols ? 'bg-gray-700 text-purple-400' : ''
                   }`}
                 >
-                  {cols} Columns
+                  <span className="md:hidden">{cols}</span>
+                  <span className="hidden md:inline">{cols} Columns</span>
                 </button>
               ))}
             </div>
