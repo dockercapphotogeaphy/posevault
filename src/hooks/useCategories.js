@@ -8,12 +8,18 @@ export const useCategories = (currentUser) => {
   const [isSaving, setIsSaving] = useState(false);
   const saveTimeoutRef = useRef(null);
   const pendingSaveRef = useRef(null);
+  const latestCategoriesRef = useRef(categories);
 
   useEffect(() => {
     if (currentUser) {
       loadFromStorage();
     }
   }, [currentUser]);
+
+  // Keep ref up to date with latest categories
+  useEffect(() => {
+    latestCategoriesRef.current = categories;
+  }, [categories]);
 
   // Debounced save - prevents multiple rapid saves during uploads
   useEffect(() => {
@@ -198,12 +204,15 @@ export const useCategories = (currentUser) => {
   };
 
   const forceSave = async () => {
-    // Force immediate save, bypassing debounce
+    // Force immediate save using the latest categories from ref
+    // This ensures we always save the most up-to-date data
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
     }
-    await saveToStorage(categories);
+
+    // Use ref to get the absolute latest categories, even if state hasn't updated yet
+    await saveToStorage(latestCategoriesRef.current);
   };
 
   return {

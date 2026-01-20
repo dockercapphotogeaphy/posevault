@@ -47,11 +47,10 @@ export default function ImageEditModal({
       onUpdatePoseName(categoryId, imageIndex, localPoseName);
     }
 
-    // Wait for React state updates to propagate before forcing save
-    // This ensures forceSave sees the updated categories state
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Small delay to ensure React has updated the ref with latest categories
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-    // Force immediate save to storage, bypassing debounce
+    // Force immediate save to storage using ref (always has latest data)
     if (onForceSave) {
       await onForceSave();
     }
