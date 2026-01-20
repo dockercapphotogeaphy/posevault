@@ -73,7 +73,7 @@ export function OfflineIndicator() {
 
         {/* Tooltip */}
         {showTooltip && !isOnline && (
-          <div className="absolute top-full right-0 mt-2 z-50 w-64">
+          <div className="absolute top-full right-0 mt-2 z-50 w-56 sm:w-64 max-w-[calc(100vw-2rem)]">
             <div className="bg-gray-800 rounded-lg p-3 shadow-xl border border-gray-700">
               <div className="flex items-start gap-2">
                 <WifiOff size={18} className="text-orange-500 flex-shrink-0 mt-0.5" />
