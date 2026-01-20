@@ -32,6 +32,7 @@ export default function PhotographyPoseGuide() {
   const {
     categories,
     isLoading: categoriesLoading,
+    isSaving,
     addCategory,
     updateCategory,
     deleteCategory,
@@ -225,6 +226,13 @@ export default function PhotographyPoseGuide() {
     } catch (error) {
       console.error('Error uploading images:', error);
       setShowUploadProgress(false);
+
+      // Show error message if quota exceeded
+      if (error.message && error.message.includes('quota')) {
+        alert('Storage quota exceeded! Please delete some images to free up space.');
+      } else {
+        alert('Upload failed. Please try again with fewer images.');
+      }
     }
 
     // Reset file input
@@ -355,6 +363,8 @@ export default function PhotographyPoseGuide() {
         onAddCategory={() => setShowNewCategoryModal(true)}
         onUploadPoses={handleImagesUpload}
         onLogout={handleLogout}
+        isUploading={showUploadProgress}
+        isSaving={isSaving}
       />
 
       {viewMode === 'categories' && (

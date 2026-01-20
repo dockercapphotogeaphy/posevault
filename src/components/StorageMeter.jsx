@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { HardDrive, AlertCircle, Shield } from 'lucide-react';
 import { getStorageEstimate, getStorageColor, getStorageStatus, requestPersistentStorage } from '../utils/storageEstimate';
 
-export default function StorageMeter({ compact = false }) {
+export default function StorageMeter({ compact = false, pauseRefresh = false }) {
   const [storageInfo, setStorageInfo] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showTooltip, setShowTooltip] = useState(false);
@@ -10,10 +10,14 @@ export default function StorageMeter({ compact = false }) {
   useEffect(() => {
     loadStorageInfo();
 
-    // Refresh every 30 seconds
-    const interval = setInterval(loadStorageInfo, 30000);
+    // Refresh every 30 seconds, but pause during uploads/saves to prevent conflicts
+    const interval = setInterval(() => {
+      if (!pauseRefresh) {
+        loadStorageInfo();
+      }
+    }, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [pauseRefresh]);
 
   // Close tooltip when clicking outside
   useEffect(() => {

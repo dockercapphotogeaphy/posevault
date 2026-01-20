@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { storage } from '../utils/storage';
 import { initializeDefaultCategories } from '../utils/helpers';
 
 export const useCategories = (currentUser) => {
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const saveTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -12,11 +14,25 @@ export const useCategories = (currentUser) => {
     }
   }, [currentUser]);
 
-  // Save to storage whenever categories change
+  // Debounced save - prevents multiple rapid saves during uploads
   useEffect(() => {
     if (!isLoading && categories.length > 0 && currentUser) {
-      saveToStorage();
+      // Clear any pending save
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+
+      // Debounce: wait 500ms after last change before saving
+      saveTimeoutRef.current = setTimeout(() => {
+        saveToStorage();
+      }, 500);
     }
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, [categories, isLoading, currentUser]);
 
   const loadFromStorage = async () => {
@@ -49,10 +65,24 @@ export const useCategories = (currentUser) => {
   };
 
   const saveToStorage = async () => {
+    if (isSaving) {
+      console.log('Save already in progress, skipping...');
+      return;
+    }
+
+    setIsSaving(true);
     try {
       await storage.set(`categories:${currentUser}`, JSON.stringify(categories));
+      console.log('Data saved successfully');
     } catch (error) {
       console.error('Failed to save data:', error);
+
+      // Check if it's a quota exceeded error
+      if (error.message && error.message.includes('quota')) {
+        console.error('Storage quota exceeded! Consider deleting unused images.');
+      }
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -156,6 +186,7 @@ export const useCategories = (currentUser) => {
   return {
     categories,
     isLoading,
+    isSaving,
     addCategory,
     updateCategory,
     deleteCategory,
