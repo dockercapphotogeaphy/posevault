@@ -5,6 +5,7 @@ import { getStorageEstimate, getStorageColor, getStorageStatus } from '../utils/
 export default function StorageMeter({ compact = false }) {
   const [storageInfo, setStorageInfo] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showTooltip, setShowTooltip] = useState(false);
 
   useEffect(() => {
     loadStorageInfo();
@@ -13,6 +14,20 @@ export default function StorageMeter({ compact = false }) {
     const interval = setInterval(loadStorageInfo, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Close tooltip when clicking outside
+  useEffect(() => {
+    if (!showTooltip) return;
+
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.storage-meter-wrapper')) {
+        setShowTooltip(false);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showTooltip]);
 
   const loadStorageInfo = async () => {
     setIsLoading(true);
@@ -36,14 +51,20 @@ export default function StorageMeter({ compact = false }) {
   // Compact view - for header or toolbar
   if (compact) {
     return (
-      <div className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors cursor-help group relative">
+      <div
+        className="storage-meter-wrapper flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors cursor-pointer group relative"
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowTooltip(!showTooltip);
+        }}
+      >
         <HardDrive size={16} className={percentUsed > 75 ? colorClass : ''} />
         <span className={percentUsed > 75 ? colorClass : ''}>
           {storageInfo.usageMB}MB
         </span>
 
         {/* Tooltip */}
-        <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block z-50 w-64">
+        <div className={`absolute bottom-full left-0 mb-2 z-50 w-64 ${showTooltip ? 'block' : 'hidden group-hover:block'}`}>
           <div className="bg-gray-800 rounded-lg p-3 shadow-xl border border-gray-700">
             <div className="text-xs text-gray-400 mb-2">Storage Usage</div>
             <div className="flex justify-between text-sm mb-2">

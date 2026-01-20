@@ -14,6 +14,7 @@ import DeleteConfirmModal from './components/Modals/DeleteConfirmModal';
 import ImageEditModal from './components/Modals/ImageEditModal';
 import FilterModal from './components/Modals/FilterModal';
 import BulkEditModal from './components/Modals/BulkEditModal';
+import UploadProgressModal from './components/Modals/UploadProgressModal';
 
 // Hooks & Utils
 import { useAuth } from './hooks/useAuth';
@@ -63,6 +64,11 @@ export default function PhotographyPoseGuide() {
   const [editingImage, setEditingImage] = useState(null);
   const [showTagFilterModal, setShowTagFilterModal] = useState(false);
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+
+  // Upload progress
+  const [showUploadProgress, setShowUploadProgress] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [uploadComplete, setUploadComplete] = useState(false);
 
   // Image filtering and sorting
   const [sortBy, setSortBy] = useState('dateAdded');
@@ -154,47 +160,75 @@ export default function PhotographyPoseGuide() {
 
   const handleImagesUpload = async (e, categoryId) => {
     const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    // Reset and show upload progress modal
+    setUploadProgress({ current: 0, total: files.length });
+    setUploadComplete(false);
+    setShowUploadProgress(true);
 
     try {
-      // Convert all images to optimized WebP format
-      const optimizedDataUrls = await convertMultipleToWebP(files, {
-        maxWidth: 1920,
-        maxHeight: 1920,
-        quality: 0.85
-      });
+      const images = [];
 
-      // Create image objects with optimized data
-      const images = optimizedDataUrls.map(src => ({
-        src,
-        isFavorite: false,
-        tags: [],
-        notes: '',
-        dateAdded: new Date().toISOString()
-      }));
+      // Process images one by one to show progress
+      for (let i = 0; i < files.length; i++) {
+        // Update progress
+        setUploadProgress({ current: i + 1, total: files.length });
 
-      addImages(categoryId, images);
-    } catch (error) {
-      console.error('Error optimizing images:', error);
+        try {
+          // Convert to optimized WebP format
+          const optimizedDataUrl = await convertToWebP(files[i], {
+            maxWidth: 1920,
+            maxHeight: 1920,
+            quality: 0.85
+          });
 
-      // Fallback to original method if conversion fails
-      const readers = files.map(file => {
-        return new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (event) => resolve({
-            src: event.target.result,
+          images.push({
+            src: optimizedDataUrl,
             isFavorite: false,
             tags: [],
             notes: '',
             dateAdded: new Date().toISOString()
           });
-          reader.readAsDataURL(file);
-        });
-      });
+        } catch (error) {
+          console.error(`Error optimizing image ${i + 1}:`, error);
 
-      Promise.all(readers).then(images => {
-        addImages(categoryId, images);
-      });
+          // Fallback to original if conversion fails
+          const reader = await new Promise((resolve) => {
+            const fileReader = new FileReader();
+            fileReader.onload = (event) => resolve(event.target.result);
+            fileReader.readAsDataURL(files[i]);
+          });
+
+          images.push({
+            src: reader,
+            isFavorite: false,
+            tags: [],
+            notes: '',
+            dateAdded: new Date().toISOString()
+          });
+        }
+      }
+
+      // Add all processed images
+      addImages(categoryId, images);
+
+      // Show completion state
+      setUploadComplete(true);
+
+      // Auto-close after 1.5 seconds
+      setTimeout(() => {
+        setShowUploadProgress(false);
+        setUploadComplete(false);
+      }, 1500);
+
+    } catch (error) {
+      console.error('Error uploading images:', error);
+      setShowUploadProgress(false);
     }
+
+    // Reset file input
+    e.target.value = '';
   };
 
   const handleToggleFavorite = (categoryId, imageIndex) => {
@@ -487,6 +521,14 @@ export default function PhotographyPoseGuide() {
           onDelete={handleBulkDelete}
         />
       )}
+
+      {/* Upload Progress Modal */}
+      <UploadProgressModal
+        isVisible={showUploadProgress}
+        currentImage={uploadProgress.current}
+        totalImages={uploadProgress.total}
+        isComplete={uploadComplete}
+      />
     </div>
   );
 }
