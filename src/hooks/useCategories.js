@@ -1,10 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { storage } from '../utils/storage';
 import { initializeDefaultCategories } from '../utils/helpers';
 
 export const useCategories = (currentUser) => {
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const saveTimeoutRef = useRef(null);
+  const pendingSaveRef = useRef(null);
+  const latestCategoriesRef = useRef(categories);
 
   useEffect(() => {
     if (currentUser) {
@@ -12,11 +16,32 @@ export const useCategories = (currentUser) => {
     }
   }, [currentUser]);
 
-  // Save to storage whenever categories change
+  // Keep ref up to date with latest categories
+  useEffect(() => {
+    latestCategoriesRef.current = categories;
+  }, [categories]);
+
+  // Debounced save - prevents multiple rapid saves during uploads
   useEffect(() => {
     if (!isLoading && categories.length > 0 && currentUser) {
-      saveToStorage();
+      // Clear any pending save
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+
+      // Debounce: wait 500ms after last change before saving
+      // Capture categories in the closure to avoid stale data
+      const categoriesToSave = categories;
+      saveTimeoutRef.current = setTimeout(() => {
+        saveToStorage(categoriesToSave);
+      }, 500);
     }
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, [categories, isLoading, currentUser]);
 
   const loadFromStorage = async () => {
@@ -48,11 +73,36 @@ export const useCategories = (currentUser) => {
     }
   };
 
-  const saveToStorage = async () => {
+  const saveToStorage = async (categoriesToSave) => {
+    if (isSaving) {
+      console.log('Save already in progress, queuing this save...');
+      // Queue this save to run after the current one completes
+      pendingSaveRef.current = categoriesToSave;
+      return;
+    }
+
+    setIsSaving(true);
     try {
-      await storage.set(`categories:${currentUser}`, JSON.stringify(categories));
+      await storage.set(`categories:${currentUser}`, JSON.stringify(categoriesToSave));
+      console.log('Data saved successfully');
     } catch (error) {
       console.error('Failed to save data:', error);
+
+      // Check if it's a quota exceeded error
+      if (error.message && error.message.includes('quota')) {
+        console.error('Storage quota exceeded! Consider deleting unused images.');
+      }
+    } finally {
+      setIsSaving(false);
+
+      // If there was a pending save queued, execute it now
+      if (pendingSaveRef.current) {
+        console.log('Executing queued save...');
+        const queuedData = pendingSaveRef.current;
+        pendingSaveRef.current = null;
+        // Use setTimeout to avoid synchronous recursion
+        setTimeout(() => saveToStorage(queuedData), 0);
+      }
     }
   };
 
@@ -153,9 +203,22 @@ export const useCategories = (currentUser) => {
     ));
   };
 
+  const forceSave = async () => {
+    // Force immediate save using the latest categories from ref
+    // This ensures we always save the most up-to-date data
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+
+    // Use ref to get the absolute latest categories, even if state hasn't updated yet
+    await saveToStorage(latestCategoriesRef.current);
+  };
+
   return {
     categories,
     isLoading,
+    isSaving,
     addCategory,
     updateCategory,
     deleteCategory,
@@ -164,6 +227,7 @@ export const useCategories = (currentUser) => {
     updateImage,
     deleteImage,
     bulkUpdateImages,
-    bulkDeleteImages
+    bulkDeleteImages,
+    forceSave
   };
 };

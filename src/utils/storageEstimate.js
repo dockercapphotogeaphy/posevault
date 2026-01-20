@@ -13,6 +13,19 @@ export const getStorageEstimate = async () => {
       const quota = estimate.quota || 0;
       const percentUsed = quota > 0 ? (usage / quota) * 100 : 0;
 
+      // Check if storage is persisted
+      let isPersisted = false;
+      if (navigator.storage && navigator.storage.persisted) {
+        isPersisted = await navigator.storage.persisted();
+      }
+
+      console.log('Storage API Data:', {
+        usage: `${(usage / (1024 * 1024)).toFixed(2)}MB`,
+        quota: `${(quota / (1024 * 1024)).toFixed(2)}MB`,
+        percentUsed: `${percentUsed.toFixed(2)}%`,
+        isPersisted
+      });
+
       return {
         usage,
         quota,
@@ -20,11 +33,13 @@ export const getStorageEstimate = async () => {
         usageMB: (usage / (1024 * 1024)).toFixed(2),
         quotaMB: (quota / (1024 * 1024)).toFixed(2),
         available: quota - usage,
-        availableMB: ((quota - usage) / (1024 * 1024)).toFixed(2)
+        availableMB: ((quota - usage) / (1024 * 1024)).toFixed(2),
+        isPersisted
       };
     }
 
     // Fallback: Try to estimate from IndexedDB
+    console.warn('Storage API not available - app must be accessed via HTTPS or localhost for accurate storage info');
     const dbEstimate = await estimateIndexedDBSize();
     return dbEstimate;
   } catch (error) {
@@ -85,8 +100,10 @@ const estimateIndexedDBSize = async () => {
             }
           });
 
-          // Assume a conservative quota of 50MB for browsers without Storage API
-          const assumedQuota = 50 * 1024 * 1024;
+          // Assume a realistic quota for modern mobile devices
+          // Chrome typically allocates ~6-10% of available storage
+          // Using 300MB as a reasonable estimate for mobile devices
+          const assumedQuota = 300 * 1024 * 1024;
           const percentUsed = (estimatedSize / assumedQuota) * 100;
 
           resolve({
@@ -97,7 +114,8 @@ const estimateIndexedDBSize = async () => {
             quotaMB: (assumedQuota / (1024 * 1024)).toFixed(0),
             available: assumedQuota - estimatedSize,
             availableMB: ((assumedQuota - estimatedSize) / (1024 * 1024)).toFixed(2),
-            estimated: true
+            estimated: true,
+            insecureContext: true
           });
         };
 
@@ -165,4 +183,22 @@ export const getStorageStatus = (percentUsed) => {
   if (percentUsed < 75) return 'Moderate';
   if (percentUsed < 90) return 'High';
   return 'Critical';
+};
+
+/**
+ * Request persistent storage to prevent data eviction and potentially increase quota
+ * @returns {Promise<boolean>} Whether persistent storage was granted
+ */
+export const requestPersistentStorage = async () => {
+  try {
+    if (navigator.storage && navigator.storage.persist) {
+      const isPersisted = await navigator.storage.persist();
+      console.log('Persistent storage request result:', isPersisted);
+      return isPersisted;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error requesting persistent storage:', error);
+    return false;
+  }
 };

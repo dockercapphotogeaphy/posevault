@@ -9,7 +9,9 @@ export default function Header({
   onBack,
   onAddCategory,
   onUploadPoses,
-  onLogout
+  onLogout,
+  isUploading = false,
+  isSaving = false
 }) {
   return (
     <div className="bg-gray-800 border-b border-gray-700 p-3 md:p-4">
@@ -28,6 +30,7 @@ export default function Header({
           </h1>
         </div>
         <div className="flex items-center gap-2 md:gap-3">
+          <StorageMeter compact={true} pauseRefresh={isUploading || isSaving} />
           {viewMode === 'categories' && (
             <button
               onClick={onAddCategory}
@@ -61,7 +64,6 @@ export default function Header({
               </div>
             </label>
           )}
-          <StorageMeter compact={true} />
           <button
             onClick={onLogout}
             className="bg-red-600 hover:bg-red-700 px-2 py-2 md:px-4 md:py-2 rounded-lg flex items-center gap-1 md:gap-2 transition-colors text-sm md:text-base cursor-pointer"

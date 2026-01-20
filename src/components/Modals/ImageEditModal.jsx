@@ -9,21 +9,24 @@ export default function ImageEditModal({
   onClose,
   onUpdateTags,
   onUpdateNotes,
-  onUpdatePoseName
+  onUpdatePoseName,
+  onForceSave
 }) {
   const [tagInput, setTagInput] = useState('');
   const [localNotes, setLocalNotes] = useState('');
   const [localTags, setLocalTags] = useState([]);
   const [localPoseName, setLocalPoseName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (image) {
+    // Don't reset local state if we're in the middle of saving
+    if (image && !isSaving) {
       setLocalNotes(image.notes || '');
       setLocalTags(image.tags || []);
       setLocalPoseName(image.poseName || '');
       setTagInput('');
     }
-  }, [image]);
+  }, [image, isSaving]);
 
   const handleAddTag = (tag) => {
     if (tag.trim() && !localTags.includes(tag.trim())) {
@@ -40,11 +43,19 @@ export default function ImageEditModal({
     onUpdateTags(categoryId, imageIndex, newTags);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    // Prevent useEffect from resetting local state during save
+    setIsSaving(true);
+
     onUpdateNotes(categoryId, imageIndex, localNotes);
     if (onUpdatePoseName) {
       onUpdatePoseName(categoryId, imageIndex, localPoseName);
     }
+
+    // Wait for the debounced save to complete (500ms + save time)
+    // The debounced save has the correct data captured in its closure
+    await new Promise(resolve => setTimeout(resolve, 700));
+
     onClose();
   };
 
