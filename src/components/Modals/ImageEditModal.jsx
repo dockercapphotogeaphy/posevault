@@ -16,15 +16,17 @@ export default function ImageEditModal({
   const [localNotes, setLocalNotes] = useState('');
   const [localTags, setLocalTags] = useState([]);
   const [localPoseName, setLocalPoseName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (image) {
+    // Don't reset local state if we're in the middle of saving
+    if (image && !isSaving) {
       setLocalNotes(image.notes || '');
       setLocalTags(image.tags || []);
       setLocalPoseName(image.poseName || '');
       setTagInput('');
     }
-  }, [image]);
+  }, [image, isSaving]);
 
   const handleAddTag = (tag) => {
     if (tag.trim() && !localTags.includes(tag.trim())) {
@@ -42,6 +44,9 @@ export default function ImageEditModal({
   };
 
   const handleSave = async () => {
+    // Prevent useEffect from resetting local state during save
+    setIsSaving(true);
+
     onUpdateNotes(categoryId, imageIndex, localNotes);
     if (onUpdatePoseName) {
       onUpdatePoseName(categoryId, imageIndex, localPoseName);
