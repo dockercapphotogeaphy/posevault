@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { HardDrive, AlertCircle } from 'lucide-react';
-import { getStorageEstimate, getStorageColor, getStorageStatus } from '../utils/storageEstimate';
+import { HardDrive, AlertCircle, Shield } from 'lucide-react';
+import { getStorageEstimate, getStorageColor, getStorageStatus, requestPersistentStorage } from '../utils/storageEstimate';
 
 export default function StorageMeter({ compact = false }) {
   const [storageInfo, setStorageInfo] = useState(null);
@@ -34,6 +34,14 @@ export default function StorageMeter({ compact = false }) {
     const info = await getStorageEstimate();
     setStorageInfo(info);
     setIsLoading(false);
+  };
+
+  const handleRequestPersistentStorage = async () => {
+    const granted = await requestPersistentStorage();
+    if (granted) {
+      // Reload storage info to see if quota increased
+      await loadStorageInfo();
+    }
   };
 
   if (isLoading || !storageInfo) {
@@ -152,6 +160,26 @@ export default function StorageMeter({ compact = false }) {
             {percentUsed.toFixed(1)}%
           </span>
         </div>
+
+        {/* Persistent Storage Section */}
+        {!storageInfo.estimated && (
+          <div className="flex justify-between items-center text-sm pt-2 border-t border-gray-700">
+            <div className="flex items-center gap-2">
+              <Shield size={16} className={storageInfo.isPersisted ? 'text-green-500' : 'text-gray-500'} />
+              <span className="text-gray-400">Persistent Storage:</span>
+            </div>
+            {storageInfo.isPersisted ? (
+              <span className="text-green-500 font-medium">Enabled</span>
+            ) : (
+              <button
+                onClick={handleRequestPersistentStorage}
+                className="text-blue-500 hover:text-blue-400 font-medium transition-colors cursor-pointer"
+              >
+                Request
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Warning if storage is high */}
         {percentUsed > 75 && (
