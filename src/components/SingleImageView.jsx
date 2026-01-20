@@ -168,9 +168,14 @@ export default function SingleImageView({
               <X size={24} />
             </button>
 
-            <h2 className="text-lg font-semibold">
-              Pose {currentIndex + 1} of {totalImages}
-            </h2>
+            <div className="text-center flex-1 mx-4">
+              {image.poseName && (
+                <h2 className="text-lg font-semibold">{image.poseName}</h2>
+              )}
+              <p className={`text-sm ${image.poseName ? 'text-gray-400' : 'text-lg font-semibold'}`}>
+                Pose {currentIndex + 1} of {totalImages}
+              </p>
+            </div>
 
             <button
               onClick={onToggleFavorite}

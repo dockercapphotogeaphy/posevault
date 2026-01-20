@@ -415,6 +415,7 @@ export default function PhotographyPoseGuide() {
             onClose={() => setEditingImage(null)}
             onUpdateTags={(catId, imgIndex, tags) => updateImage(catId, imgIndex, { tags })}
             onUpdateNotes={(catId, imgIndex, notes) => updateImage(catId, imgIndex, { notes })}
+            onUpdatePoseName={(catId, imgIndex, poseName) => updateImage(catId, imgIndex, { poseName })}
           />
         );
       })()}
