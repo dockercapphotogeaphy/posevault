@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Heart, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { X, Heart, ChevronLeft, ChevronRight, Calendar, StickyNote } from 'lucide-react';
 
 export default function SingleImageView({
   image,
@@ -13,6 +13,7 @@ export default function SingleImageView({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [showNotesModal, setShowNotesModal] = useState(false);
   const imageRef = useRef(null);
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
   const lastTouchDistanceRef = useRef(null);
@@ -27,6 +28,7 @@ export default function SingleImageView({
     setIsFullscreen(false);
     setScale(1);
     setPosition({ x: 0, y: 0 });
+    setShowNotesModal(false);
   }, [currentIndex]);
 
   // Handle swipe gestures for navigation (only when not in fullscreen)
@@ -156,20 +158,35 @@ export default function SingleImageView({
   return (
     <div className="fixed inset-0 bg-black z-50">
       <div className="h-full flex flex-col">
-        {/* Close button - hidden in fullscreen */}
+        {/* Header - hidden in fullscreen */}
         {!isFullscreen && (
-          <div className="absolute top-4 left-4 z-10">
+          <div className="bg-gray-900 px-4 py-3 flex items-center justify-between">
             <button
               onClick={onClose}
-              className="bg-gray-800 bg-opacity-75 hover:bg-opacity-100 p-3 rounded-full transition-all cursor-pointer"
+              className="p-2 hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
             >
-              <X size={28} />
+              <X size={24} />
+            </button>
+
+            <h2 className="text-lg font-semibold">
+              Pose {currentIndex + 1} of {totalImages}
+            </h2>
+
+            <button
+              onClick={onToggleFavorite}
+              className="p-2 hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
+            >
+              <Heart
+                size={24}
+                className={image.isFavorite ? 'fill-red-500 text-red-500' : 'text-white'}
+              />
             </button>
           </div>
         )}
 
+        {/* Image container with navigation */}
         <div
-          className="flex-1 flex items-center justify-center relative p-4 overflow-hidden"
+          className="flex-1 flex items-center justify-center relative overflow-hidden"
           onTouchStart={isFullscreen ? handleTouchStartFullscreen : handleTouchStart}
           onTouchMove={isFullscreen ? handleTouchMoveFullscreen : undefined}
           onTouchEnd={isFullscreen ? handleTouchEndFullscreen : handleTouchEnd}
@@ -189,81 +206,109 @@ export default function SingleImageView({
             onClick={handleImageClick}
           />
 
-          {/* Favorite button - hidden in fullscreen */}
-          {!isFullscreen && (
-            <button
-              onClick={onToggleFavorite}
-              className="absolute top-4 right-4 p-3 rounded-full bg-gray-800 bg-opacity-75 hover:bg-opacity-100 transition-all cursor-pointer"
-            >
-              <Heart
-                size={28}
-                className={image.isFavorite ? 'fill-red-500 text-red-500' : 'text-white'}
-              />
-            </button>
-          )}
-
-          {/* Navigation arrows - hidden in fullscreen, moved slightly inward */}
+          {/* Navigation arrows - thin vertical strips on edges */}
           {!isFullscreen && currentIndex > 0 && (
             <button
               onClick={onPrevious}
-              className="absolute left-2 top-1/2 -translate-y-1/2 bg-gray-800 bg-opacity-75 hover:bg-opacity-100 p-4 rounded-full transition-all cursor-pointer"
+              className="absolute left-0 top-0 bottom-0 w-20 flex items-center justify-start pl-2 bg-gradient-to-r from-black/30 to-transparent hover:from-black/50 transition-all cursor-pointer group"
             >
-              <ChevronLeft size={32} />
+              <div className="bg-gray-800 bg-opacity-75 group-hover:bg-opacity-100 p-3 rounded-full transition-all">
+                <ChevronLeft size={24} />
+              </div>
             </button>
           )}
 
           {!isFullscreen && currentIndex < totalImages - 1 && (
             <button
               onClick={onNext}
-              className="absolute right-2 top-1/2 -translate-y-1/2 bg-gray-800 bg-opacity-75 hover:bg-opacity-100 p-4 rounded-full transition-all cursor-pointer"
+              className="absolute right-0 top-0 bottom-0 w-20 flex items-center justify-end pr-2 bg-gradient-to-l from-black/30 to-transparent hover:from-black/50 transition-all cursor-pointer group"
             >
-              <ChevronRight size={32} />
+              <div className="bg-gray-800 bg-opacity-75 group-hover:bg-opacity-100 p-3 rounded-full transition-all">
+                <ChevronRight size={24} />
+              </div>
             </button>
           )}
         </div>
 
-        {/* Bottom info panel - hidden in fullscreen */}
+        {/* Footer - hidden in fullscreen */}
         {!isFullscreen && (
-          <div className="bg-gray-800 p-4">
+          <div
+            className={`bg-gray-900 p-4 ${image.notes ? 'cursor-pointer hover:bg-gray-800 transition-colors' : ''}`}
+            onClick={() => image.notes && setShowNotesModal(true)}
+          >
             <div className="max-w-4xl mx-auto">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-gray-300 text-lg">
-                  Pose {currentIndex + 1} of {totalImages}
-                  {image.isFavorite && (
-                    <span className="ml-2 text-red-500">★ Favorite</span>
+              <div className="flex items-center justify-between gap-4">
+                {/* Tags - max 3 */}
+                <div className="flex flex-wrap gap-2 flex-1 min-w-0">
+                  {image.tags && image.tags.length > 0 ? (
+                    <>
+                      {image.tags.slice(0, 3).map((tag, i) => (
+                        <span key={i} className="bg-purple-600 text-white text-sm px-3 py-1 rounded-full">
+                          {tag}
+                        </span>
+                      ))}
+                      {image.tags.length > 3 && (
+                        <span className="bg-gray-700 text-white text-sm px-3 py-1 rounded-full">
+                          +{image.tags.length - 3}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-gray-400 text-sm">No tags</span>
                   )}
-                </p>
-                <div className="flex items-center gap-2 text-gray-400 text-sm">
-                  <Calendar size={16} />
-                  <span>
-                    {image.dateAdded
-                      ? `Added ${new Date(image.dateAdded).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}`
-                      : 'Date not available'}
-                  </span>
+                </div>
+
+                {/* Date and Notes indicator */}
+                <div className="flex items-center gap-3 text-gray-400 text-sm whitespace-nowrap">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={16} />
+                    <span>
+                      {image.dateAdded
+                        ? new Date(image.dateAdded).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })
+                        : 'N/A'}
+                    </span>
+                  </div>
+                  {image.notes && (
+                    <StickyNote size={16} className="text-blue-400" />
+                  )}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
 
-              {/* Tags */}
-              {image.tags && image.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {image.tags.map((tag, i) => (
-                    <span key={i} className="bg-purple-600 text-white text-sm px-3 py-1 rounded-full">
-                      {tag}
-                    </span>
-                  ))}
+        {/* Notes Modal */}
+        {showNotesModal && image.notes && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowNotesModal(false)}
+          >
+            <div
+              className="bg-gray-800 rounded-xl p-6 max-w-2xl w-full mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 bg-blue-600 rounded-full">
+                  <StickyNote size={24} />
                 </div>
-              )}
-
-              {/* Notes */}
-              {image.notes && (
-                <div className="mt-2 bg-gray-700 rounded-lg p-3">
-                  <p className="text-gray-300 text-sm">{image.notes}</p>
+                <div>
+                  <h3 className="text-xl font-bold">Notes</h3>
+                  <p className="text-sm text-gray-400">Pose {currentIndex + 1}</p>
                 </div>
-              )}
+              </div>
+              <div className="bg-gray-700 rounded-lg p-4 mb-6">
+                <p className="text-gray-300 whitespace-pre-wrap">{image.notes}</p>
+              </div>
+              <button
+                onClick={() => setShowNotesModal(false)}
+                className="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg transition-colors cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           </div>
         )}
