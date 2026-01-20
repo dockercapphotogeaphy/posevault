@@ -1,5 +1,5 @@
 import React from 'react';
-import { Heart, Grid3x3, ChevronDown, Filter, CopyCheck, CopyX, SquarePen, Images, Upload } from 'lucide-react';
+import { Heart, Grid3x3, ChevronDown, Filter, CopyCheck, CopyX, SquarePen, Images, Upload, Search, X as XIcon } from 'lucide-react';
 import ImageCard from './ImageCard';
 import { getGridColsClass } from '../utils/helpers';
 
@@ -12,12 +12,14 @@ export default function ImageGrid({
   sortBy,
   showFavoritesOnly,
   selectedTagFilters,
+  searchTerm,
   bulkSelectMode,
   selectedImages,
   dropdownRef,
   onUploadImages,
   onSetSortBy,
   onShowTagFilter,
+  onSearchChange,
   onToggleBulkSelect,
   onShowBulkEdit,
   onToggleGridDropdown,
@@ -95,6 +97,26 @@ export default function ImageGrid({
             </span>
           )}
         </button>
+
+        {/* Search Box */}
+        <div className="relative flex-1 max-w-xs">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={searchTerm || ''}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search poses..."
+            className="w-full bg-gray-700 text-white pl-10 pr-10 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => onSearchChange('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+            >
+              <XIcon size={18} />
+            </button>
+          )}
+        </div>
 
         {/* Bulk Select Button */}
         <button

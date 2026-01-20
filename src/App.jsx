@@ -67,6 +67,7 @@ export default function PhotographyPoseGuide() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [selectedTagFilters, setSelectedTagFilters] = useState([]);
   const [tagFilterMode, setTagFilterMode] = useState('include');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Bulk selection
   const [bulkSelectMode, setBulkSelectMode] = useState(false);
@@ -252,7 +253,8 @@ export default function PhotographyPoseGuide() {
     selectedTagFilters,
     tagFilterMode,
     showFavoritesOnly,
-    sortBy
+    sortBy,
+    searchTerm
   }) : [];
 
   // Get all tags
@@ -322,12 +324,14 @@ export default function PhotographyPoseGuide() {
           sortBy={sortBy}
           showFavoritesOnly={showFavoritesOnly}
           selectedTagFilters={categoryTags.length > 0 ? selectedTagFilters : null}
+          searchTerm={searchTerm}
           bulkSelectMode={bulkSelectMode}
           selectedImages={selectedImages}
           dropdownRef={dropdownRef}
           onUploadImages={handleImagesUpload}
           onSetSortBy={handleSetSortBy}
           onShowTagFilter={() => setShowTagFilterModal(true)}
+          onSearchChange={setSearchTerm}
           onToggleBulkSelect={() => {
             setBulkSelectMode(!bulkSelectMode);
             setSelectedImages([]);
