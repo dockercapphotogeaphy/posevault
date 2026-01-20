@@ -6,6 +6,7 @@ import Header from './components/Header';
 import CategoryGrid from './components/CategoryGrid';
 import ImageGrid from './components/ImageGrid';
 import SingleImageView from './components/SingleImageView';
+import { OfflineIndicator } from './components/OfflineIndicator';
 
 // Modals
 import NewCategoryModal from './components/Modals/NewCategoryModal';
@@ -356,6 +357,7 @@ export default function PhotographyPoseGuide() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
+      <OfflineIndicator />
       <Header
         viewMode={viewMode}
         categoryName={category?.name}
