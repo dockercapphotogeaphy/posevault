@@ -7,6 +7,7 @@ export const useCategories = (currentUser) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const saveTimeoutRef = useRef(null);
+  const pendingSaveRef = useRef(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -68,7 +69,9 @@ export const useCategories = (currentUser) => {
 
   const saveToStorage = async (categoriesToSave) => {
     if (isSaving) {
-      console.log('Save already in progress, skipping...');
+      console.log('Save already in progress, queuing this save...');
+      // Queue this save to run after the current one completes
+      pendingSaveRef.current = categoriesToSave;
       return;
     }
 
@@ -85,6 +88,15 @@ export const useCategories = (currentUser) => {
       }
     } finally {
       setIsSaving(false);
+
+      // If there was a pending save queued, execute it now
+      if (pendingSaveRef.current) {
+        console.log('Executing queued save...');
+        const queuedData = pendingSaveRef.current;
+        pendingSaveRef.current = null;
+        // Use setTimeout to avoid synchronous recursion
+        setTimeout(() => saveToStorage(queuedData), 0);
+      }
     }
   };
 
