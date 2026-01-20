@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChevronLeft, Plus, Upload, LogOut } from 'lucide-react';
 import StorageMeter from './StorageMeter';
+import { OfflineIndicator } from './OfflineIndicator';
 
 export default function Header({
   viewMode,
@@ -30,6 +31,7 @@ export default function Header({
           </h1>
         </div>
         <div className="flex items-center gap-2 md:gap-3">
+          <OfflineIndicator />
           <StorageMeter compact={true} pauseRefresh={isUploading || isSaving} />
           {viewMode === 'categories' && (
             <button

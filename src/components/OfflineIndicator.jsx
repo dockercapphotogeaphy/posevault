@@ -3,11 +3,13 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useState, useEffect } from 'react';
 
 /**
- * Displays a banner when the user is offline
- * Shows a brief notification when coming back online
+ * Displays network status as an icon with tooltip
+ * Shows green Wifi icon when online, orange WifiOff when offline
+ * Displays temporary banner notification when coming back online
  */
 export function OfflineIndicator() {
   const isOnline = useOnlineStatus();
+  const [showTooltip, setShowTooltip] = useState(false);
   const [showOnlineNotification, setShowOnlineNotification] = useState(false);
   const [wasOffline, setWasOffline] = useState(false);
 
@@ -15,6 +17,7 @@ export function OfflineIndicator() {
     // Track if user was offline to show "back online" message
     if (!isOnline) {
       setWasOffline(true);
+      setShowTooltip(false); // Close tooltip when going offline
     }
 
     // When coming back online, show notification briefly
@@ -28,29 +31,63 @@ export function OfflineIndicator() {
     }
   }, [isOnline, wasOffline]);
 
-  // Show "Back Online" notification
-  if (showOnlineNotification) {
-    return (
-      <div className="fixed top-0 left-0 right-0 z-50 bg-green-600 text-white px-4 py-2 shadow-lg">
-        <div className="flex items-center justify-center gap-2">
-          <Wifi className="w-5 h-5" />
-          <span className="font-medium">Back Online</span>
-        </div>
-      </div>
-    );
-  }
+  // Close tooltip when clicking outside
+  useEffect(() => {
+    if (!showTooltip) return;
 
-  // Show "Offline Mode" banner
-  if (!isOnline) {
-    return (
-      <div className="fixed top-0 left-0 right-0 z-50 bg-amber-600 text-white px-4 py-2 shadow-lg">
-        <div className="flex items-center justify-center gap-2">
-          <WifiOff className="w-5 h-5" />
-          <span className="font-medium">Offline Mode - Your data is saved locally</span>
-        </div>
-      </div>
-    );
-  }
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.offline-indicator-wrapper')) {
+        setShowTooltip(false);
+      }
+    };
 
-  return null;
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showTooltip]);
+
+  return (
+    <>
+      {/* Temporary "Back Online" notification banner */}
+      {showOnlineNotification && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-green-600 text-white px-4 py-2 shadow-lg">
+          <div className="flex items-center justify-center gap-2">
+            <Wifi className="w-5 h-5" />
+            <span className="font-medium">Back Online</span>
+          </div>
+        </div>
+      )}
+
+      {/* Network status icon with tooltip */}
+      <div
+        className="offline-indicator-wrapper flex items-center text-sm hover:text-white transition-colors cursor-pointer relative"
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowTooltip(!showTooltip);
+        }}
+      >
+        {isOnline ? (
+          <Wifi size={16} className="text-green-500" />
+        ) : (
+          <WifiOff size={16} className="text-orange-500" />
+        )}
+
+        {/* Tooltip */}
+        {showTooltip && !isOnline && (
+          <div className="absolute top-full right-0 mt-2 z-50 w-64">
+            <div className="bg-gray-800 rounded-lg p-3 shadow-xl border border-gray-700">
+              <div className="flex items-start gap-2">
+                <WifiOff size={18} className="text-orange-500 flex-shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="text-white font-medium mb-1">Offline Mode</p>
+                  <p className="text-gray-400 text-xs">
+                    Your data is saved locally and will be available when you reconnect.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
 }
