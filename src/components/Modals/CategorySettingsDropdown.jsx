@@ -77,7 +77,7 @@ export default function CategorySettingsDropdown({
         <span>
           {category.images.length === 0
             ? 'No Images for PDF'
-            : 'Download Reference Sheet'
+            : 'Download Ref. Sheet'
           }
         </span>
       </button>
