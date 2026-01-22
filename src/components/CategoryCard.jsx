@@ -13,7 +13,8 @@ export default function CategoryCard({
   onGeneratePDF
 }) {
   const [showDropdown, setShowDropdown] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState('bottom');
+  const [dropdownAlignRight, setDropdownAlignRight] = useState(false);
+  const [dropdownAlignTop, setDropdownAlignTop] = useState(false);
   const dropdownRef = useRef(null);
   const settingsButtonRef = useRef(null);
 
@@ -38,22 +39,14 @@ export default function CategoryCard({
     if (settingsButtonRef.current) {
       const rect = settingsButtonRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
       const spaceRight = window.innerWidth - rect.right;
       
-      // Check vertical position
-      // If not enough space below (less than 250px) and more space above, render on top
-      if (spaceBelow < 250 && spaceAbove > spaceBelow) {
-        setDropdownPosition('top');
-      } else {
-        setDropdownPosition('bottom');
-      }
+      // Check if dropdown should align to the right (based on screen position)
+      const screenMidpoint = window.innerWidth / 2;
+      setDropdownAlignRight(rect.left > screenMidpoint);
       
-      // Check horizontal position
-      // If dropdown would go off right edge (need ~200px), shift it left
-      if (spaceRight < 220) {
-        setDropdownPosition(prev => prev + '-left');
-      }
+      // Check if dropdown should appear above the button
+      setDropdownAlignTop(spaceBelow < 250);
     }
     setShowDropdown(!showDropdown);
   };
@@ -160,9 +153,9 @@ export default function CategoryCard({
             </div>
           </label>
 
-          {/* Settings button with dropdown - DYNAMIC POSITIONING */}
+          {/* Settings button with dropdown */}
           <div className="absolute bottom-1 right-1 md:bottom-2 md:right-2">
-            <div className="relative" ref={dropdownRef}>
+            <div ref={dropdownRef}>
               <button
                 ref={settingsButtonRef}
                 onClick={handleSettingsClick}
@@ -171,13 +164,13 @@ export default function CategoryCard({
                 <Settings size={16} className="text-gray-300 md:w-5 md:h-5" />
               </button>
 
-              {/* Dropdown positioned dynamically based on available space */}
+              {/* Dropdown menu */}
               {showDropdown && (
                 <div className={`absolute ${
-                  dropdownPosition.includes('top') ? 'bottom-full mb-2' : 'top-full mt-2'
+                  dropdownAlignTop ? 'bottom-full mb-2' : 'mt-2'
                 } ${
-                  dropdownPosition.includes('left') ? 'left-0' : 'right-0'
-                } z-50`}>
+                  dropdownAlignRight ? 'right-0' : 'left-0'
+                } min-w-[180px] z-20`}>
                   <CategorySettingsDropdown
                     category={category}
                     onEditSettings={(catId) => {
