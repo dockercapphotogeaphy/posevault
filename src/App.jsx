@@ -46,6 +46,7 @@ export default function PhotographyPoseGuide() {
   const { isAuthenticated, currentUser, session, isLoading: authLoading, login, register, logout } = useAuth();
   const {
     categories,
+    categoriesRef,
     isLoading: categoriesLoading,
     isSaving,
     addCategory,
@@ -291,7 +292,7 @@ export default function PhotographyPoseGuide() {
 
   // Background R2 upload function
   const uploadImagesToR2InBackground = async (categoryId, images, filenames) => {
-    const cat = categories.find(c => c.id === categoryId);
+    const cat = categoriesRef.current.find(c => c.id === categoryId);
     if (!cat) return;
 
     // Find the starting index of the newly added images
@@ -363,8 +364,8 @@ export default function PhotographyPoseGuide() {
     // First, update locally (fast)
     updateImage(categoryId, imageIndex, updates);
 
-    // Then sync to Supabase in background
-    const cat = categories.find(c => c.id === categoryId);
+    // Then sync to Supabase in background (use ref for latest state)
+    const cat = categoriesRef.current.find(c => c.id === categoryId);
     if (cat && cat.images[imageIndex]) {
       const image = cat.images[imageIndex];
       const userId = session?.user?.id;
@@ -396,7 +397,7 @@ export default function PhotographyPoseGuide() {
 
   // Wrapper for deletion that also syncs to Supabase
   const deleteImageWithSync = (categoryId, imageIndex) => {
-    const cat = categories.find(c => c.id === categoryId);
+    const cat = categoriesRef.current.find(c => c.id === categoryId);
     if (cat && cat.images[imageIndex]) {
       const image = cat.images[imageIndex];
       const userId = session?.user?.id;
@@ -413,7 +414,7 @@ export default function PhotographyPoseGuide() {
   };
 
   const handleToggleFavorite = (categoryId, imageIndex) => {
-    const cat = categories.find(c => c.id === categoryId);
+    const cat = categoriesRef.current.find(c => c.id === categoryId);
     const image = cat.images[imageIndex];
     updateImageWithSync(categoryId, imageIndex, { isFavorite: !image.isFavorite });
   };
@@ -450,10 +451,8 @@ export default function PhotographyPoseGuide() {
       createCategoryInSupabase(categoryData, userId)
         .then(result => {
           if (result.ok) {
-            // Update local category with Supabase UID
-            // Note: This needs to find by name since we just added it
-            const latestCategories = [...categories];
-            const addedCat = latestCategories.find(c => c.name === name && !c.supabaseUid);
+            // Use categoriesRef to get the latest state (avoids stale closure)
+            const addedCat = categoriesRef.current.find(c => c.name === name && !c.supabaseUid);
             if (addedCat) {
               updateCategory(addedCat.id, { supabaseUid: result.uid });
             }
@@ -476,8 +475,8 @@ export default function PhotographyPoseGuide() {
     // Update locally first
     updateCategory(categoryId, updates);
 
-    // Sync to Supabase
-    const cat = categories.find(c => c.id === categoryId);
+    // Sync to Supabase (use ref for latest state)
+    const cat = categoriesRef.current.find(c => c.id === categoryId);
     const userId = session?.user?.id;
 
     if (cat?.supabaseUid && userId) {
@@ -505,7 +504,7 @@ export default function PhotographyPoseGuide() {
 
   // Delete category locally AND soft-delete in Supabase
   const deleteCategoryWithSync = (categoryId) => {
-    const cat = categories.find(c => c.id === categoryId);
+    const cat = categoriesRef.current.find(c => c.id === categoryId);
     const userId = session?.user?.id;
 
     // Sync deletion to Supabase
@@ -520,7 +519,7 @@ export default function PhotographyPoseGuide() {
 
   // Toggle category favorite with sync
   const toggleCategoryFavoriteWithSync = (categoryId) => {
-    const cat = categories.find(c => c.id === categoryId);
+    const cat = categoriesRef.current.find(c => c.id === categoryId);
     if (!cat) return;
 
     // Toggle locally

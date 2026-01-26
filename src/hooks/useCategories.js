@@ -221,6 +221,7 @@ export const useCategories = (currentUser) => {
 
   return {
     categories,
+    categoriesRef: latestCategoriesRef,
     isLoading,
     isSaving,
     addCategory,
