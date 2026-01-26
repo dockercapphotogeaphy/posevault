@@ -692,23 +692,54 @@ export default function PhotographyPoseGuide() {
     if (!currentCategory) return;
 
     const bulkUpdates = {};
-    
+
     if (updates.tags && updates.tags.length > 0) {
       bulkUpdates.tags = updates.tags;
     }
-    
+
     if (updates.notes && updates.notes.trim()) {
       bulkUpdates.notes = updates.notes;
       bulkUpdates.notesMode = updates.notesMode;
     }
-    
+
     if (updates.favoriteAction === 'favorite') {
       bulkUpdates.isFavorite = true;
     } else if (updates.favoriteAction === 'unfavorite') {
       bulkUpdates.isFavorite = false;
     }
 
+    // Update locally first
     bulkUpdateImages(currentCategory.id, selectedImages, bulkUpdates);
+
+    // Sync to Supabase in background
+    const userId = session?.user?.id;
+    if (userId) {
+      const cat = categoriesRef.current.find(c => c.id === currentCategory.id);
+      if (cat) {
+        for (const imageIndex of selectedImages) {
+          const image = cat.images[imageIndex];
+          if (!image?.supabaseUid) continue;
+
+          // Sync metadata updates (notes, favorites)
+          const metaUpdates = {};
+          if (bulkUpdates.notes !== undefined) metaUpdates.notes = bulkUpdates.notes;
+          if (bulkUpdates.isFavorite !== undefined) metaUpdates.isFavorite = bulkUpdates.isFavorite;
+
+          if (Object.keys(metaUpdates).length > 0) {
+            updateImageInSupabase(image.supabaseUid, metaUpdates, userId)
+              .catch(err => console.error('Bulk edit Supabase sync error:', err));
+          }
+
+          // Sync tags: merge new tags with existing image tags, then sync
+          if (bulkUpdates.tags && bulkUpdates.tags.length > 0) {
+            const existingTags = image.tags || [];
+            const mergedTags = [...new Set([...existingTags, ...bulkUpdates.tags])];
+            syncImageTags(image.supabaseUid, mergedTags, userId)
+              .catch(err => console.error('Bulk edit tag sync error:', err));
+          }
+        }
+      }
+    }
 
     setBulkSelectMode(false);
     setSelectedImages([]);

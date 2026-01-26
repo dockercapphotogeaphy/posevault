@@ -31,10 +31,10 @@ export default function ImageEditModal({
   }, [image?.dateAdded, isSaving]); // Use dateAdded as a stable identifier instead of image object
 
   const handleAddTag = (tag) => {
-    if (tag.trim() && !localTags.includes(tag.trim())) {
-      const newTags = [...localTags, tag.trim()];
+    const normalized = tag.trim().toLowerCase();
+    if (normalized && !localTags.includes(normalized)) {
+      const newTags = [...localTags, normalized];
       setLocalTags(newTags);
-      // Don't save immediately - wait for user to click Save button
       setTagInput('');
     }
   };
