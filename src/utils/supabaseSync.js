@@ -130,7 +130,7 @@ export async function createImage(imageData, categoryUid, userId) {
         image_size: imageData.size || 0,
         r2_key: imageData.r2Key,
         category_uid: categoryUid,
-        user_id: userId,
+        user_uid: userId,
       })
       .select('uid')
       .single();
@@ -169,7 +169,7 @@ export async function updateImage(imageUid, updates, userId) {
       .from('images')
       .update(supabaseUpdates)
       .eq('uid', imageUid)
-      .eq('user_id', userId)
+      .eq('user_uid', userId)
       .select();
 
     if (error) {
@@ -201,7 +201,7 @@ export async function deleteImage(imageUid, userId) {
         updated_at: new Date().toISOString(),
       })
       .eq('uid', imageUid)
-      .eq('user_id', userId);
+      .eq('user_uid', userId);
 
     if (error) {
       console.error('Supabase image delete error:', error);
@@ -225,7 +225,7 @@ export async function findImageByR2Key(r2Key, userId) {
       .from('images')
       .select('uid')
       .eq('r2_key', r2Key)
-      .eq('user_id', userId)
+      .eq('user_uid', userId)
       .is('deleted_at', null)
       .single();
 
