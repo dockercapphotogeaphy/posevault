@@ -27,6 +27,6 @@
 	 * Run: wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 	 */
 	"vars": {
-		"SUPABASE_URL": "YOUR_SUPABASE_URL_HERE"
+		"SUPABASE_URL": "https://zfvnhkkjwveehhjqisnl.supabase.co"
 	}
 }
