@@ -28,6 +28,7 @@ import {
   getDisplayedImages
 } from './utils/helpers';
 import { convertToWebP, convertMultipleToWebP } from './utils/imageOptimizer';
+import { uploadToR2 } from './utils/r2Upload';
 
 export default function PhotographyPoseGuide() {
   const { isAuthenticated, currentUser, session, isLoading: authLoading, login, register, logout } = useAuth();
@@ -193,6 +194,7 @@ export default function PhotographyPoseGuide() {
 
     try {
       const images = [];
+      const filenames = [];
 
       // Process images one by one to show progress
       for (let i = 0; i < files.length; i++) {
@@ -212,8 +214,11 @@ export default function PhotographyPoseGuide() {
             isFavorite: false,
             tags: [],
             notes: '',
-            dateAdded: new Date().toISOString()
+            dateAdded: new Date().toISOString(),
+            r2Key: null, // Will be updated after R2 upload
+            r2Status: 'pending' // pending, uploading, uploaded, failed
           });
+          filenames.push(files[i].name.replace(/\.[^/.]+$/, '.webp'));
         } catch (error) {
           console.error(`Error optimizing image ${i + 1}:`, error);
 
@@ -229,15 +234,18 @@ export default function PhotographyPoseGuide() {
             isFavorite: false,
             tags: [],
             notes: '',
-            dateAdded: new Date().toISOString()
+            dateAdded: new Date().toISOString(),
+            r2Key: null,
+            r2Status: 'pending'
           });
+          filenames.push(files[i].name);
         }
       }
 
-      // Add all processed images
+      // Add all processed images to local storage first (fast)
       addImages(categoryId, images);
 
-      // Show completion state
+      // Show completion state for local storage
       setUploadComplete(true);
 
       // Auto-close after 1.5 seconds
@@ -245,6 +253,13 @@ export default function PhotographyPoseGuide() {
         setShowUploadProgress(false);
         setUploadComplete(false);
       }, 1500);
+
+      // Upload to R2 in background (don't block UI)
+      if (session?.access_token) {
+        uploadImagesToR2InBackground(categoryId, images, filenames);
+      } else {
+        console.warn('No session - skipping R2 upload');
+      }
 
     } catch (error) {
       console.error('Error uploading images:', error);
@@ -260,6 +275,45 @@ export default function PhotographyPoseGuide() {
 
     // Reset file input
     e.target.value = '';
+  };
+
+  // Background R2 upload function
+  const uploadImagesToR2InBackground = async (categoryId, images, filenames) => {
+    const cat = categories.find(c => c.id === categoryId);
+    if (!cat) return;
+
+    // Find the starting index of the newly added images
+    const startIndex = cat.images.length - images.length;
+
+    for (let i = 0; i < images.length; i++) {
+      const imageIndex = startIndex + i;
+
+      try {
+        // Update status to uploading
+        updateImage(categoryId, imageIndex, { r2Status: 'uploading' });
+
+        const result = await uploadToR2(
+          images[i].src,
+          filenames[i],
+          session.access_token
+        );
+
+        if (result.ok) {
+          // Update with R2 key
+          updateImage(categoryId, imageIndex, {
+            r2Key: result.key,
+            r2Status: 'uploaded'
+          });
+          console.log(`R2 upload successful: ${result.key}`);
+        } else {
+          updateImage(categoryId, imageIndex, { r2Status: 'failed' });
+          console.error(`R2 upload failed for image ${i + 1}:`, result.error);
+        }
+      } catch (err) {
+        updateImage(categoryId, imageIndex, { r2Status: 'failed' });
+        console.error(`R2 upload error for image ${i + 1}:`, err);
+      }
+    }
   };
 
   const handleToggleFavorite = (categoryId, imageIndex) => {
