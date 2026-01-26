@@ -27,7 +27,7 @@ export async function syncImageMetadata(r2Key, metadata, userId) {
       updates.notes = metadata.notes;
     }
     if (metadata.isFavorite !== undefined) {
-      updates.favoriate = metadata.isFavorite; // Note: using their typo "favoriate"
+      updates.favorite = metadata.isFavorite;
     }
     if (metadata.tags !== undefined) {
       // Store tags as JSON string in notes if no tags column exists
