@@ -481,6 +481,36 @@ export async function getUserStorage(userId) {
 
 /**
  * ==========================================
+ * HYDRATION - Backfill Supabase UIDs on local data
+ * ==========================================
+ */
+
+/**
+ * Fetch all categories from Supabase for this user and return them
+ * so the app can match them to local categories by name.
+ */
+export async function fetchSupabaseCategories(userId) {
+  try {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('uid, name')
+      .eq('user_id', userId)
+      .is('deleted_at', null);
+
+    if (error) {
+      console.error('Fetch categories error:', error);
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true, categories: data || [] };
+  } catch (err) {
+    console.error('Fetch categories exception:', err);
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
+ * ==========================================
  * LEGACY COMPATIBILITY (for existing code)
  * ==========================================
  */

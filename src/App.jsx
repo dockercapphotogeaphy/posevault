@@ -39,7 +39,8 @@ import {
   deleteImage as deleteImageInSupabase,
   syncImageTags,
   syncCategoryTags,
-  updateUserStorage
+  updateUserStorage,
+  fetchSupabaseCategories
 } from './utils/supabaseSync';
 
 export default function PhotographyPoseGuide() {
@@ -118,6 +119,34 @@ export default function PhotographyPoseGuide() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Hydrate local categories with Supabase UIDs on load
+  useEffect(() => {
+    if (!session?.user?.id || categoriesLoading || categories.length === 0) return;
+
+    // Check if any categories are missing supabaseUid
+    const needsHydration = categories.some(c => !c.supabaseUid);
+    if (!needsHydration) return;
+
+    fetchSupabaseCategories(session.user.id).then(result => {
+      if (!result.ok) return;
+
+      const supabaseCategories = result.categories;
+      // Use ref to get the latest local categories
+      const localCategories = categoriesRef.current;
+
+      for (const local of localCategories) {
+        if (local.supabaseUid) continue; // Already has UID
+
+        // Match by name
+        const match = supabaseCategories.find(sc => sc.name === local.name);
+        if (match) {
+          updateCategory(local.id, { supabaseUid: match.uid });
+          console.log(`Hydrated supabaseUid for "${local.name}": ${match.uid}`);
+        }
+      }
+    });
+  }, [session?.user?.id, categoriesLoading, categories.length]);
 
   // Handlers
 
