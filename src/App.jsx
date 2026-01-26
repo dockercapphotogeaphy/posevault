@@ -29,6 +29,7 @@ import {
 } from './utils/helpers';
 import { convertToWebP, convertMultipleToWebP } from './utils/imageOptimizer';
 import { uploadToR2 } from './utils/r2Upload';
+import { syncImageMetadata, syncImageDeletion } from './utils/supabaseSync';
 
 export default function PhotographyPoseGuide() {
   const { isAuthenticated, currentUser, session, isLoading: authLoading, login, register, logout } = useAuth();
@@ -316,10 +317,50 @@ export default function PhotographyPoseGuide() {
     }
   };
 
+  // Wrapper that updates locally AND syncs to Supabase
+  const updateImageWithSync = async (categoryId, imageIndex, updates) => {
+    // First, update locally (fast)
+    updateImage(categoryId, imageIndex, updates);
+
+    // Then sync to Supabase in background
+    const cat = categories.find(c => c.id === categoryId);
+    if (cat && cat.images[imageIndex]) {
+      const image = cat.images[imageIndex];
+
+      // Only sync if the image has been uploaded to R2
+      if (image.r2Key && session?.user?.id) {
+        syncImageMetadata(image.r2Key, updates, session.user.id)
+          .then(result => {
+            if (!result.ok) {
+              console.warn('Supabase sync failed:', result.error);
+            }
+          })
+          .catch(err => console.error('Supabase sync error:', err));
+      }
+    }
+  };
+
+  // Wrapper for deletion that also syncs to Supabase
+  const deleteImageWithSync = (categoryId, imageIndex) => {
+    const cat = categories.find(c => c.id === categoryId);
+    if (cat && cat.images[imageIndex]) {
+      const image = cat.images[imageIndex];
+
+      // Sync deletion to Supabase if image was uploaded
+      if (image.r2Key && session?.user?.id) {
+        syncImageDeletion(image.r2Key, session.user.id)
+          .catch(err => console.error('Supabase delete sync error:', err));
+      }
+    }
+
+    // Delete locally
+    deleteImage(categoryId, imageIndex);
+  };
+
   const handleToggleFavorite = (categoryId, imageIndex) => {
     const cat = categories.find(c => c.id === categoryId);
     const image = cat.images[imageIndex];
-    updateImage(categoryId, imageIndex, { isFavorite: !image.isFavorite });
+    updateImageWithSync(categoryId, imageIndex, { isFavorite: !image.isFavorite });
   };
 
   const handleSaveCategorySettings = (categoryId, updates) => {
@@ -501,7 +542,7 @@ export default function PhotographyPoseGuide() {
           onToggleFavorite={(index) => handleToggleFavorite(category.id, index)}
           onEditImage={(index) => setEditingImage({ categoryId: category.id, imageIndex: index })}
           onDeleteImage={(index) => {
-            deleteImage(category.id, index);
+            deleteImageWithSync(category.id, index);
             if (currentImageIndex >= category.images.length - 1) {
               setCurrentImageIndex(Math.max(0, currentImageIndex - 1));
             }
@@ -524,7 +565,7 @@ export default function PhotographyPoseGuide() {
           onToggleFavorite={() => handleToggleFavorite(category.id, currentImageIndex)}
           onPrevious={() => setCurrentImageIndex(currentImageIndex - 1)}
           onNext={() => setCurrentImageIndex(currentImageIndex + 1)}
-          onUpdateImage={updateImage}
+          onUpdateImage={updateImageWithSync}
         />
       )}
 
@@ -575,10 +616,10 @@ export default function PhotographyPoseGuide() {
             categoryId={editingImage.categoryId}
             allTags={allTags}
             onClose={() => setEditingImage(null)}
-            onUpdateTags={(catId, imgIndex, tags) => updateImage(catId, imgIndex, { tags })}
-            onUpdateNotes={(catId, imgIndex, notes) => updateImage(catId, imgIndex, { notes })}
-            onUpdatePoseName={(catId, imgIndex, poseName) => updateImage(catId, imgIndex, { poseName })}
-            onUpdate={(catId, imgIndex, updates) => updateImage(catId, imgIndex, updates)}
+            onUpdateTags={(catId, imgIndex, tags) => updateImageWithSync(catId, imgIndex, { tags })}
+            onUpdateNotes={(catId, imgIndex, notes) => updateImageWithSync(catId, imgIndex, { notes })}
+            onUpdatePoseName={(catId, imgIndex, poseName) => updateImageWithSync(catId, imgIndex, { poseName })}
+            onUpdate={(catId, imgIndex, updates) => updateImageWithSync(catId, imgIndex, updates)}
             onForceSave={forceSave}
           />
         );
