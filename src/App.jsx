@@ -30,10 +30,14 @@ import {
 import { convertToWebP, convertMultipleToWebP } from './utils/imageOptimizer';
 import { uploadToR2 } from './utils/r2Upload';
 import {
+  createCategory as createCategoryInSupabase,
+  updateCategory as updateCategoryInSupabase,
+  deleteCategory as deleteCategoryInSupabase,
   createImage as createImageInSupabase,
   updateImage as updateImageInSupabase,
   deleteImage as deleteImageInSupabase,
   syncImageTags,
+  syncCategoryTags,
   updateUserStorage
 } from './utils/supabaseSync';
 
@@ -413,8 +417,110 @@ export default function PhotographyPoseGuide() {
     updateImageWithSync(categoryId, imageIndex, { isFavorite: !image.isFavorite });
   };
 
-  const handleSaveCategorySettings = (categoryId, updates) => {
+  // ==========================================
+  // CATEGORY SYNC WRAPPERS
+  // ==========================================
+
+  // Add category locally AND create in Supabase
+  const addCategoryWithSync = async (name, privateSettings = {}) => {
+    const userId = session?.user?.id;
+
+    // Create locally first (fast)
+    addCategory(name, privateSettings);
+
+    // Then create in Supabase
+    if (userId) {
+      const categoryData = {
+        name,
+        notes: '',
+        isFavorite: false,
+        isPrivate: privateSettings?.isPrivate || false,
+        galleryPassword: privateSettings?.galleryPassword || null,
+      };
+
+      createCategoryInSupabase(categoryData, userId)
+        .then(result => {
+          if (result.ok) {
+            // Find the category we just added (it has the highest ID)
+            const newCat = categories.reduce((max, cat) =>
+              cat.id > max.id ? cat : max
+            , { id: 0 });
+
+            // Update local category with Supabase UID
+            // Note: This needs to find by name since we just added it
+            const latestCategories = [...categories];
+            const addedCat = latestCategories.find(c => c.name === name && !c.supabaseUid);
+            if (addedCat) {
+              updateCategory(addedCat.id, { supabaseUid: result.uid });
+            }
+            console.log(`Category created in Supabase: ${result.uid}`);
+          } else {
+            console.error('Supabase category create failed:', result.error);
+          }
+        })
+        .catch(err => console.error('Supabase category create error:', err));
+    }
+  };
+
+  // Update category locally AND sync to Supabase
+  const updateCategoryWithSync = (categoryId, updates) => {
+    // Update locally first
     updateCategory(categoryId, updates);
+
+    // Sync to Supabase
+    const cat = categories.find(c => c.id === categoryId);
+    const userId = session?.user?.id;
+
+    if (cat?.supabaseUid && userId) {
+      updateCategoryInSupabase(cat.supabaseUid, updates, userId)
+        .then(result => {
+          if (!result.ok) {
+            console.warn('Supabase category sync failed:', result.error);
+          }
+        })
+        .catch(err => console.error('Supabase category sync error:', err));
+
+      // Sync category tags if updated
+      if (updates.tags) {
+        syncCategoryTags(cat.supabaseUid, updates.tags, userId)
+          .catch(err => console.error('Supabase category tags sync error:', err));
+      }
+    }
+  };
+
+  // Delete category locally AND soft-delete in Supabase
+  const deleteCategoryWithSync = (categoryId) => {
+    const cat = categories.find(c => c.id === categoryId);
+    const userId = session?.user?.id;
+
+    // Sync deletion to Supabase
+    if (cat?.supabaseUid && userId) {
+      deleteCategoryInSupabase(cat.supabaseUid, userId)
+        .catch(err => console.error('Supabase category delete error:', err));
+    }
+
+    // Delete locally
+    deleteCategory(categoryId);
+  };
+
+  // Toggle category favorite with sync
+  const toggleCategoryFavoriteWithSync = (categoryId) => {
+    const cat = categories.find(c => c.id === categoryId);
+    if (!cat) return;
+
+    // Toggle locally
+    toggleCategoryFavorite(categoryId);
+
+    // Sync to Supabase
+    const userId = session?.user?.id;
+    if (cat.supabaseUid && userId) {
+      updateCategoryInSupabase(cat.supabaseUid, { isFavorite: !cat.isFavorite }, userId)
+        .catch(err => console.error('Supabase category favorite sync error:', err));
+    }
+  };
+
+  const handleSaveCategorySettings = (categoryId, updates) => {
+    updateCategoryWithSync(categoryId, updates);
     setEditingCategory(null);
   };
 
@@ -549,7 +655,7 @@ export default function PhotographyPoseGuide() {
             setShowCategoryGridDropdown(false);
           }}
           onOpenCategory={handleOpenCategory}
-          onToggleFavorite={toggleCategoryFavorite}
+          onToggleFavorite={toggleCategoryFavoriteWithSync}
           onUploadImages={handleImagesUpload}
           onEditSettings={(catId) => setEditingCategory(catId)}
           onUploadCover={handleCoverUpload}
@@ -624,7 +730,7 @@ export default function PhotographyPoseGuide() {
         <NewCategoryModal
           onClose={() => setShowNewCategoryModal(false)}
           onAdd={(name, privateSettings) => {
-            addCategory(name, privateSettings);
+            addCategoryWithSync(name, privateSettings);
             setShowNewCategoryModal(false);
           }}
         />
@@ -647,7 +753,7 @@ export default function PhotographyPoseGuide() {
           <DeleteConfirmModal
             category={cat}
             onConfirm={() => {
-              deleteCategory(showDeleteConfirm);
+              deleteCategoryWithSync(showDeleteConfirm);
               setShowDeleteConfirm(null);
               setEditingCategory(null);
             }}
