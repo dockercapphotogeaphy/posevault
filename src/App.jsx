@@ -213,15 +213,85 @@ export default function PhotographyPoseGuide() {
           quality: 0.85
         });
         updateCategory(categoryId, { cover: optimizedCover });
+
+        // Upload to R2 and link in Supabase in background
+        if (session?.access_token) {
+          uploadCoverAndLink(optimizedCover, categoryId, file.name);
+        }
       } catch (error) {
         console.error('Error optimizing cover image:', error);
         // Fallback to original if conversion fails
         const reader = new FileReader();
         reader.onload = (event) => {
           updateCategory(categoryId, { cover: event.target.result });
+          if (session?.access_token) {
+            uploadCoverAndLink(event.target.result, categoryId, file.name);
+          }
         };
         reader.readAsDataURL(file);
       }
+    }
+  };
+
+  // Upload a cover image to R2, create an image record, and link it to the category
+  const uploadCoverAndLink = async (dataURL, categoryId, originalFilename) => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+
+    const cat = categoriesRef.current.find(c => c.id === categoryId);
+    if (!cat) return;
+
+    const filename = (originalFilename || 'cover').replace(/\.[^/.]+$/, '') + '_cover.webp';
+
+    try {
+      // Upload to R2
+      const r2Result = await uploadToR2(dataURL, filename, session.access_token);
+      if (!r2Result.ok) {
+        console.error('Cover R2 upload failed:', r2Result.error);
+        return;
+      }
+      console.log(`Cover uploaded to R2: ${r2Result.key}`);
+
+      // Store R2 key locally
+      updateCategory(categoryId, { coverR2Key: r2Result.key });
+
+      // Create image record in Supabase
+      const categoryUid = categoriesRef.current.find(c => c.id === categoryId)?.supabaseUid;
+      if (!categoryUid) {
+        console.warn('No supabaseUid yet for category, cover_image_uid will be linked after hydration');
+        return;
+      }
+
+      const imageResult = await createImageInSupabase(
+        {
+          r2Key: r2Result.key,
+          size: r2Result.size,
+          poseName: filename,
+          notes: 'Cover image',
+          isFavorite: false,
+        },
+        categoryUid,
+        userId
+      );
+
+      if (imageResult.ok) {
+        // Link cover_image_uid on the category
+        updateCategoryInSupabase(categoryUid, { coverImageUid: imageResult.uid }, userId)
+          .then(res => {
+            if (res.ok) {
+              console.log(`Cover linked: cover_image_uid = ${imageResult.uid}`);
+            } else {
+              console.warn('Failed to link cover_image_uid:', res.error);
+            }
+          });
+
+        // Track storage
+        updateUserStorage(userId, r2Result.size);
+      } else {
+        console.error('Cover Supabase image create failed:', imageResult.error);
+      }
+    } catch (err) {
+      console.error('Cover upload error:', err);
     }
   };
 
@@ -499,6 +569,11 @@ export default function PhotographyPoseGuide() {
                       console.warn('Post-create sync failed:', syncResult.error);
                     }
                   });
+              }
+
+              // Upload cover image to R2 and link it if one was provided
+              if (addedCat.cover && session?.access_token) {
+                uploadCoverAndLink(addedCat.cover, addedCat.id, name);
               }
             }
             console.log(`Category created in Supabase: ${result.uid}`);
