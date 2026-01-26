@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff, X } from 'lucide-react';
-import { storage } from '../utils/storage';
 
-export default function LoginScreen({ onLogin }) {
+export default function LoginScreen({ onLogin, onRegister }) {
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -11,7 +10,9 @@ export default function LoginScreen({ onLogin }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [showGuestModal, setShowGuestModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [passwordRequirements, setPasswordRequirements] = useState({
     minLength: false,
     hasLowercase: false,
@@ -32,14 +33,20 @@ export default function LoginScreen({ onLogin }) {
     }
   }, [password, isRegistering]);
 
+  // Clear error when switching modes
+  useEffect(() => {
+    setError('');
+    setSuccessMessage('');
+  }, [isRegistering]);
+
   const handleAuth = async () => {
     if (!email || !password) {
-      alert('Please enter both email and password');
+      setError('Please enter both email and password');
       return;
     }
 
     if (isRegistering && (!firstName || !lastName)) {
-      alert('Please enter your first and last name');
+      setError('Please enter your first and last name');
       return;
     }
 
@@ -52,89 +59,44 @@ export default function LoginScreen({ onLogin }) {
       if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) passwordErrors.push('a symbol');
 
       if (passwordErrors.length > 0) {
-        alert(`Password must contain:\n• ${passwordErrors.join('\n• ')}`);
+        setError(`Password must contain: ${passwordErrors.join(', ')}`);
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setError('Passwords do not match');
         return;
       }
     }
 
-    const userKey = `user:${email}`;
+    setError('');
+    setIsSubmitting(true);
 
-    if (isRegistering) {
-      try {
-        const existingUser = await storage.get(userKey);
-        if (existingUser) {
-          alert('An account with this email already exists. Please login or use a different email.');
-          return;
-        }
-
-        if (!passwordRequirements.minLength || !passwordRequirements.hasLowercase || 
-            !passwordRequirements.hasUppercase || !passwordRequirements.hasNumber || 
-            !passwordRequirements.hasSymbol) {
-          alert('Please meet all password requirements before registering.');
-          return;
-        }
-
-        const userData = {
-          email: email,
-          firstName: firstName,
-          lastName: lastName,
-          password: password,
-          createdAt: new Date().toISOString()
-        };
-
-        await storage.set(userKey, JSON.stringify(userData));
-        await onLogin(email, userData);
-        
-      } catch (error) {
-        alert('Registration failed. Please try again.');
-        console.error(error);
-      }
-    } else {
-      try {
-        const result = await storage.get(userKey);
-        
-        if (!result) {
-          alert('User not found. Please register first.');
-          return;
-        }
-
-        const userData = JSON.parse(result.value);
-        
-        if (userData.password !== password) {
-          alert('Incorrect password');
-          return;
-        }
-
-        await onLogin(email, userData);
-        
-      } catch (error) {
-        alert('Login failed. Please try again.');
-        console.error(error);
-      }
-    }
-  };
-
-  const skipRegistration = async () => {
     try {
-      const guestEmail = 'guest@posevault.local';
-      
-      if (typeof localStorage === 'undefined') {
-        alert('LocalStorage not available. Please enable cookies and storage in your browser settings.');
-        return;
+      if (isRegistering) {
+        await onRegister(email, password, { firstName, lastName });
+        setSuccessMessage('Account created! Please check your email to confirm your account, then log in.');
+        setIsRegistering(false);
+        // Clear form
+        setPassword('');
+        setConfirmPassword('');
+      } else {
+        await onLogin(email, password);
+        // Auth state will update automatically via Supabase listener
       }
-      
-      await onLogin(guestEmail, { firstName: 'Guest', lastName: 'User' });
-      setShowGuestModal(false);
-    } catch (error) {
-      alert('Error logging in as guest: ' + error.message);
+    } catch (err) {
+      console.error('Auth error:', err);
+      setError(err.message || 'Authentication failed. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const isRegisterDisabled = isRegistering && (
-    !firstName || 
-    !lastName || 
-    !email || 
-    !password || 
+    !firstName ||
+    !lastName ||
+    !email ||
+    !password ||
     !confirmPassword ||
     password !== confirmPassword ||
     !passwordRequirements.minLength ||
@@ -151,7 +113,21 @@ export default function LoginScreen({ onLogin }) {
         <p className="text-gray-400 text-center mb-6">
           {isRegistering ? 'Create your account' : 'Sign in to continue'}
         </p>
-        
+
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-500/20 border border-red-500 text-red-300 px-4 py-3 rounded-lg mb-4">
+            {error}
+          </div>
+        )}
+
+        {/* Success Message */}
+        {successMessage && (
+          <div className="bg-green-500/20 border border-green-500 text-green-300 px-4 py-3 rounded-lg mb-4">
+            {successMessage}
+          </div>
+        )}
+
         <div className="space-y-4">
           {isRegistering && (
             <>
@@ -161,6 +137,7 @@ export default function LoginScreen({ onLogin }) {
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder="First Name"
                 className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                disabled={isSubmitting}
               />
               <input
                 type="text"
@@ -168,6 +145,7 @@ export default function LoginScreen({ onLogin }) {
                 onChange={(e) => setLastName(e.target.value)}
                 placeholder="Last Name"
                 className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                disabled={isSubmitting}
               />
             </>
           )}
@@ -177,21 +155,24 @@ export default function LoginScreen({ onLogin }) {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
             className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+            disabled={isSubmitting}
           />
-          
+
           <div className="relative">
             <input
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && !isRegistering && handleAuth()}
+              onKeyPress={(e) => e.key === 'Enter' && !isRegistering && !isSubmitting && handleAuth()}
               placeholder="Password"
               className="w-full bg-gray-700 text-white px-4 py-3 pr-12 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+              disabled={isSubmitting}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors cursor-pointer"
+              disabled={isSubmitting}
             >
               {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
             </button>
@@ -204,14 +185,16 @@ export default function LoginScreen({ onLogin }) {
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleAuth()}
+                  onKeyPress={(e) => e.key === 'Enter' && !isSubmitting && handleAuth()}
                   placeholder="Confirm Password"
                   className="w-full bg-gray-700 text-white px-4 py-3 pr-12 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  disabled={isSubmitting}
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                  disabled={isSubmitting}
                 >
                   {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
@@ -225,7 +208,7 @@ export default function LoginScreen({ onLogin }) {
                   <span>{password === confirmPassword ? 'Passwords match' : 'Passwords do not match'}</span>
                 </div>
               )}
-              
+
               {password && (
                 <div className="space-y-2 -mt-2">
                   <div>
@@ -238,7 +221,7 @@ export default function LoginScreen({ onLogin }) {
                       </span>
                     </div>
                     <div className="w-full bg-gray-600 rounded-full h-2 overflow-hidden">
-                      <div 
+                      <div
                         className={`h-full transition-all duration-300 ${
                           password.length >= 8 ? 'bg-green-500' : 'bg-purple-500'
                         }`}
@@ -269,48 +252,41 @@ export default function LoginScreen({ onLogin }) {
               )}
             </>
           )}
-          
+
           <button
             onClick={handleAuth}
-            disabled={isRegisterDisabled}
+            disabled={isRegisterDisabled || isSubmitting}
             className={`w-full px-4 py-3 rounded-lg font-semibold transition-colors ${
-              isRegisterDisabled
+              isRegisterDisabled || isSubmitting
                 ? 'bg-gray-600 cursor-not-allowed opacity-50'
                 : 'bg-purple-600 hover:bg-purple-700 cursor-pointer'
             }`}
           >
-            {isRegistering ? 'Register' : 'Login'}
+            {isSubmitting ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                {isRegistering ? 'Creating Account...' : 'Signing In...'}
+              </span>
+            ) : (
+              isRegistering ? 'Register' : 'Login'
+            )}
           </button>
-          
+
           <button
             onClick={() => setIsRegistering(!isRegistering)}
             className="w-full text-gray-400 hover:text-white transition-colors text-sm cursor-pointer"
+            disabled={isSubmitting}
           >
             {isRegistering ? 'Already have an account? Login' : "Don't have an account? Register"}
-          </button>
-
-          <button
-            onClick={() => setShowGuestModal(true)}
-            className="w-full bg-yellow-600 hover:bg-yellow-700 px-4 py-3 rounded-lg font-semibold transition-colors mt-2 cursor-pointer"
-          >
-            ⚡ Continue as Guest
-          </button>
-
-          {/* DEBUG ONLY */}
-          <button
-            onClick={() => onLogin('debug@posevault.local', { firstName: 'Debug', lastName: 'User' })}
-            className="w-full bg-red-600 hover:bg-red-700 px-4 py-3 rounded-lg font-semibold transition-colors mt-2 text-xs cursor-pointer"
-          >
-            🚀 SKIP LOGIN (DEBUG)
           </button>
         </div>
 
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-400">
             Powered by{' '}
-            <a 
-              href="http://www.dockercapphotography.com/" 
-              target="_blank" 
+            <a
+              href="http://www.dockercapphotography.com/"
+              target="_blank"
               rel="noopener noreferrer"
               className="text-purple-400 hover:text-purple-300 transition-colors underline"
             >
@@ -319,53 +295,6 @@ export default function LoginScreen({ onLogin }) {
           </p>
         </div>
       </div>
-
-      {/* Guest Mode Warning Modal */}
-      {showGuestModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-yellow-400">⚠️ Guest Mode Warning</h2>
-              <button
-                onClick={() => setShowGuestModal(false)}
-                className="p-2 hover:bg-gray-700 rounded-lg transition-colors cursor-pointer"
-              >
-                <X size={24} />
-              </button>
-            </div>
-            <div className="mb-6 space-y-3 text-gray-300">
-              <p>
-                Without an account, your data will be saved under a <strong>shared guest account</strong>.
-              </p>
-              <p className="text-yellow-300">
-                <strong>This means:</strong>
-              </p>
-              <ul className="list-disc list-inside space-y-2 ml-2">
-                <li>Anyone using guest mode on this device will see your categories and images</li>
-                <li>Others can modify or delete your content</li>
-                <li>Your data is not private or secure</li>
-              </ul>
-              <p className="pt-2 text-purple-300">
-                For private storage, please create an account.
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowGuestModal(false)}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-3 rounded-lg transition-colors font-semibold cursor-pointer"
-              >
-                Go Back
-              </button>
-              <button
-                onClick={skipRegistration}
-                className="flex-1 bg-yellow-600 hover:bg-yellow-700 px-4 py-3 rounded-lg transition-colors font-semibold cursor-pointer"
-              >
-                Continue Anyway
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

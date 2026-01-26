@@ -1,56 +1,82 @@
 import { useState, useEffect } from 'react';
-import { storage } from '../utils/storage';
+import { supabase } from '../supabaseClient';
 
 export const useAuth = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [session, setSession] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
-    try {
-      const result = await storage.get('current-session');
-      if (result && result.value) {
-        const session = JSON.parse(result.value);
-        setCurrentUser(session.email);
+    // Get initial session
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      if (data.session) {
+        setCurrentUser(data.session.user.email);
         setIsAuthenticated(true);
       }
-    } catch (error) {
-      console.log('No active session');
-    } finally {
       setIsLoading(false);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+        setCurrentUser(session.user.email);
+        setIsAuthenticated(true);
+      } else {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const login = async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      throw error;
     }
+
+    return data;
   };
 
-  const login = async (email, userData) => {
-    await storage.set('current-session', JSON.stringify({ 
-      email, 
-      firstName: userData.firstName, 
-      lastName: userData.lastName 
-    }));
-    setCurrentUser(email);
-    setIsAuthenticated(true);
+  const register = async (email, password, metadata = {}) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: metadata, // firstName, lastName stored in user metadata
+      },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
   };
 
   const logout = async () => {
-    try {
-      await storage.delete('current-session');
-      setIsAuthenticated(false);
-      setCurrentUser(null);
-    } catch (error) {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
       console.error('Logout failed:', error);
+      throw error;
     }
   };
 
   return {
     isAuthenticated,
     currentUser,
+    session, // Expose session for R2 uploads (access_token)
     isLoading,
     login,
+    register,
     logout,
-    checkAuth
   };
 };

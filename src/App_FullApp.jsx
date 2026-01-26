@@ -30,7 +30,7 @@ import {
 import { convertToWebP, convertMultipleToWebP } from './utils/imageOptimizer';
 
 export default function PhotographyPoseGuide() {
-  const { isAuthenticated, currentUser, isLoading: authLoading, login, logout } = useAuth();
+  const { isAuthenticated, currentUser, session, isLoading: authLoading, login, register, logout } = useAuth();
   const {
     categories,
     isLoading: categoriesLoading,
@@ -106,9 +106,6 @@ export default function PhotographyPoseGuide() {
   }, []);
 
   // Handlers
-  const handleLogin = async (email, userData) => {
-    await login(email, userData);
-  };
 
   const handleLogout = async () => {
     await logout();
@@ -376,7 +373,7 @@ export default function PhotographyPoseGuide() {
 
   // Login screen
   if (!isAuthenticated) {
-    return <LoginScreen onLogin={handleLogin} />;
+    return <LoginScreen onLogin={login} onRegister={register} />;
   }
 
   return (
