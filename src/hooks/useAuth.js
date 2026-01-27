@@ -6,6 +6,7 @@ export const useAuth = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [session, setSession] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   useEffect(() => {
     // Get initial session
@@ -19,9 +20,14 @@ export const useAuth = () => {
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      if (session) {
+
+      if (event === 'PASSWORD_RECOVERY') {
+        // User clicked the reset link in their email — prompt for new password
+        setIsPasswordRecovery(true);
+        setIsAuthenticated(false);
+      } else if (session) {
         setCurrentUser(session.user.email);
         setIsAuthenticated(true);
       } else {
@@ -83,13 +89,38 @@ export const useAuth = () => {
     }
   };
 
+  const resetPassword = async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    });
+
+    if (error) {
+      throw error;
+    }
+  };
+
+  const updatePassword = async (newPassword) => {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    setIsPasswordRecovery(false);
+  };
+
   return {
     isAuthenticated,
     currentUser,
     session, // Expose session for R2 uploads (access_token)
     isLoading,
+    isPasswordRecovery,
     login,
     register,
     logout,
+    resetPassword,
+    updatePassword,
   };
 };

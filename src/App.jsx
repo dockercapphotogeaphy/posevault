@@ -48,7 +48,7 @@ import {
 } from './utils/supabaseSync';
 
 export default function PhotographyPoseGuide() {
-  const { isAuthenticated, currentUser, session, isLoading: authLoading, login, register, logout } = useAuth();
+  const { isAuthenticated, currentUser, session, isLoading: authLoading, isPasswordRecovery, login, register, logout, resetPassword, updatePassword } = useAuth();
   const {
     categories,
     categoriesRef,
@@ -1106,9 +1106,17 @@ export default function PhotographyPoseGuide() {
     );
   }
 
-  // Login screen
-  if (!isAuthenticated) {
-    return <LoginScreen onLogin={login} onRegister={register} />;
+  // Login screen (also shown during password recovery flow)
+  if (!isAuthenticated || isPasswordRecovery) {
+    return (
+      <LoginScreen
+        onLogin={login}
+        onRegister={register}
+        onResetPassword={resetPassword}
+        onUpdatePassword={updatePassword}
+        isPasswordRecovery={isPasswordRecovery}
+      />
+    );
   }
 
   return (
