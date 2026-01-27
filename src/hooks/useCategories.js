@@ -207,6 +207,11 @@ export const useCategories = (currentUser) => {
     ));
   };
 
+  // Replace all categories (used by cloud sync to populate local state)
+  const replaceAllCategories = (newCategories) => {
+    setCategories(newCategories);
+  };
+
   const forceSave = async () => {
     // Force immediate save using the latest categories from ref
     // This ensures we always save the most up-to-date data
@@ -233,6 +238,7 @@ export const useCategories = (currentUser) => {
     deleteImage,
     bulkUpdateImages,
     bulkDeleteImages,
+    replaceAllCategories,
     forceSave
   };
 };

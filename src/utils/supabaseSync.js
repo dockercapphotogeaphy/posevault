@@ -556,6 +556,109 @@ export async function getUserStorage(userId) {
 
 /**
  * ==========================================
+ * CLOUD PULL - Full data fetch for cross-device sync
+ * ==========================================
+ */
+
+/**
+ * Fetch all user data from Supabase for cross-device sync.
+ * Returns categories, images, and tags structured for local consumption.
+ */
+export async function fetchFullCloudData(userId) {
+  try {
+    // Fetch all categories
+    const { data: categories, error: catError } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('user_id', userId)
+      .is('deleted_at', null);
+
+    if (catError) {
+      console.error('Cloud pull: categories fetch error:', catError);
+      return { ok: false, error: catError.message };
+    }
+
+    if (!categories || categories.length === 0) {
+      console.log('Cloud pull: no categories found in Supabase');
+      return { ok: true, categories: [], images: [], imageTagsLookup: {} };
+    }
+
+    // Fetch all images for this user
+    const { data: images, error: imgError } = await supabase
+      .from('images')
+      .select('*')
+      .eq('user_id', userId)
+      .is('deleted_at', null);
+
+    if (imgError) {
+      console.error('Cloud pull: images fetch error:', imgError);
+      return { ok: false, error: imgError.message };
+    }
+
+    // Fetch all tags for this user
+    const { data: tags, error: tagError } = await supabase
+      .from('tags')
+      .select('uid, name')
+      .eq('user_id', userId);
+
+    if (tagError) {
+      console.warn('Cloud pull: tags fetch error:', tagError);
+    }
+
+    // Build tag UID → name lookup
+    const tagLookup = {};
+    for (const tag of (tags || [])) {
+      tagLookup[tag.uid] = tag.name;
+    }
+
+    // Fetch all image_tags entries for the user's images
+    const imageUids = (images || []).map(img => img.uid);
+    let allImageTags = [];
+
+    if (imageUids.length > 0) {
+      // Fetch in batches of 100 to avoid query limits
+      for (let i = 0; i < imageUids.length; i += 100) {
+        const batch = imageUids.slice(i, i + 100);
+        const { data: itBatch, error: itError } = await supabase
+          .from('image_tags')
+          .select('image_uid, tag_uid')
+          .in('image_uid', batch);
+
+        if (itError) {
+          console.warn('Cloud pull: image_tags batch fetch error:', itError);
+        } else {
+          allImageTags = allImageTags.concat(itBatch || []);
+        }
+      }
+    }
+
+    // Build image UID → tag names lookup
+    const imageTagsLookup = {};
+    for (const it of allImageTags) {
+      if (!imageTagsLookup[it.image_uid]) {
+        imageTagsLookup[it.image_uid] = [];
+      }
+      const tagName = tagLookup[it.tag_uid];
+      if (tagName) {
+        imageTagsLookup[it.image_uid].push(tagName);
+      }
+    }
+
+    console.log(`Cloud pull complete: ${categories.length} categories, ${(images || []).length} images, ${allImageTags.length} image-tag links`);
+    return {
+      ok: true,
+      categories: categories || [],
+      images: images || [],
+      imageTagsLookup,
+    };
+  } catch (err) {
+    console.error('Cloud pull exception:', err);
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
+ * ==========================================
  * HYDRATION - Backfill Supabase UIDs on local data
  * ==========================================
  */

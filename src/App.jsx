@@ -28,7 +28,7 @@ import {
   getDisplayedImages
 } from './utils/helpers';
 import { convertToWebP, convertMultipleToWebP } from './utils/imageOptimizer';
-import { uploadToR2 } from './utils/r2Upload';
+import { uploadToR2, fetchFromR2, getR2Url } from './utils/r2Upload';
 import { hashPassword } from './utils/crypto';
 import {
   createCategory as createCategoryInSupabase,
@@ -42,7 +42,8 @@ import {
   syncCategoryTags,
   updateUserStorage,
   fetchSupabaseCategories,
-  fetchSupabaseImages
+  fetchSupabaseImages,
+  fetchFullCloudData
 } from './utils/supabaseSync';
 
 export default function PhotographyPoseGuide() {
@@ -61,6 +62,7 @@ export default function PhotographyPoseGuide() {
     deleteImage,
     bulkUpdateImages,
     bulkDeleteImages,
+    replaceAllCategories,
     forceSave
   } = useCategories(currentUser);
 
@@ -104,6 +106,11 @@ export default function PhotographyPoseGuide() {
   const [bulkSelectMode, setBulkSelectMode] = useState(false);
   const [selectedImages, setSelectedImages] = useState([]);
 
+  // Cloud sync state
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+  const [cloudSyncProgress, setCloudSyncProgress] = useState('');
+  const cloudSyncAttemptedRef = useRef(false);
+
   // Refs
   const dropdownRef = useRef(null);
   const categoryDropdownRef = useRef(null);
@@ -121,6 +128,151 @@ export default function PhotographyPoseGuide() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // ==========================================
+  // CROSS-DEVICE SYNC: Pull from cloud if local is empty
+  // ==========================================
+  useEffect(() => {
+    if (!session?.user?.id || categoriesLoading || isCloudSyncing) return;
+    if (cloudSyncAttemptedRef.current) return;
+
+    // Only sync if local storage has no real data (empty or just defaults with no images)
+    const hasLocalData = categories.some(c => c.images && c.images.length > 0);
+    if (hasLocalData) {
+      cloudSyncAttemptedRef.current = true;
+      return;
+    }
+
+    // Mark that we've attempted sync so we don't loop
+    cloudSyncAttemptedRef.current = true;
+
+    const syncFromCloud = async () => {
+      const userId = session.user.id;
+      const accessToken = session.access_token;
+
+      setIsCloudSyncing(true);
+      setCloudSyncProgress('Checking cloud for your data...');
+
+      try {
+        const cloudData = await fetchFullCloudData(userId);
+        if (!cloudData.ok || cloudData.categories.length === 0) {
+          console.log('No cloud data found for this user');
+          setIsCloudSyncing(false);
+          setCloudSyncProgress('');
+          return;
+        }
+
+        setCloudSyncProgress(`Found ${cloudData.categories.length} categories, loading images...`);
+
+        const { categories: supabaseCategories, images: supabaseImages, imageTagsLookup } = cloudData;
+
+        // Group images by category_uid
+        const imagesByCategoryUid = {};
+        for (const img of supabaseImages) {
+          if (!imagesByCategoryUid[img.category_uid]) {
+            imagesByCategoryUid[img.category_uid] = [];
+          }
+          imagesByCategoryUid[img.category_uid].push(img);
+        }
+
+        // Build local category objects
+        const localCategories = [];
+        let totalImages = 0;
+        let loadedImages = 0;
+
+        // Count total images for progress
+        for (const cat of supabaseCategories) {
+          totalImages += (imagesByCategoryUid[cat.uid] || []).length;
+        }
+
+        for (let catIdx = 0; catIdx < supabaseCategories.length; catIdx++) {
+          const cat = supabaseCategories[catIdx];
+          const catImages = imagesByCategoryUid[cat.uid] || [];
+
+          setCloudSyncProgress(
+            `Loading "${cat.name}" (${catIdx + 1}/${supabaseCategories.length})...`
+          );
+
+          // Build image objects — fetch actual image data from R2
+          const localImages = [];
+          for (const img of catImages) {
+            loadedImages++;
+            if (loadedImages % 5 === 0 || loadedImages === totalImages) {
+              setCloudSyncProgress(
+                `Loading images... ${loadedImages}/${totalImages}`
+              );
+            }
+
+            // Fetch the actual image from R2
+            let imageSrc = null;
+            if (img.r2_key && accessToken) {
+              const r2Result = await fetchFromR2(img.r2_key, accessToken);
+              if (r2Result.ok) {
+                imageSrc = r2Result.dataURL;
+              } else {
+                console.warn(`Failed to fetch image from R2: ${img.r2_key}`, r2Result.error);
+                // Fallback: try direct URL
+                imageSrc = getR2Url(img.r2_key);
+              }
+            }
+
+            localImages.push({
+              src: imageSrc,
+              poseName: img.name || '',
+              notes: img.notes || '',
+              isFavorite: img.favorite || false,
+              tags: imageTagsLookup[img.uid] || [],
+              dateAdded: img.created_at || new Date().toISOString(),
+              r2Key: img.r2_key || null,
+              r2Status: img.r2_key ? 'uploaded' : 'pending',
+              supabaseUid: img.uid,
+            });
+          }
+
+          // Find cover image data URL
+          let coverSrc = null;
+          if (cat.cover_image_uid) {
+            const coverImg = catImages.find(img => img.uid === cat.cover_image_uid);
+            if (coverImg) {
+              const coverLocal = localImages.find(li => li.supabaseUid === cat.cover_image_uid);
+              if (coverLocal) {
+                coverSrc = coverLocal.src;
+              }
+            }
+          }
+
+          localCategories.push({
+            id: catIdx + 1,
+            name: cat.name,
+            cover: coverSrc,
+            images: localImages,
+            isFavorite: cat.favorite || false,
+            notes: cat.notes || '',
+            isPrivate: cat.private_gallery || false,
+            privatePassword: cat.gallery_password || null,
+            supabaseUid: cat.uid,
+          });
+        }
+
+        setCloudSyncProgress('Saving to local storage...');
+
+        // Replace local state with cloud data
+        replaceAllCategories(localCategories);
+
+        console.log(`Cloud sync complete: ${localCategories.length} categories, ${loadedImages} images`);
+
+        setCloudSyncProgress('');
+        setIsCloudSyncing(false);
+
+      } catch (err) {
+        console.error('Cloud sync error:', err);
+        setCloudSyncProgress('');
+        setIsCloudSyncing(false);
+      }
+    };
+
+    syncFromCloud();
+  }, [session?.user?.id, categoriesLoading]);
 
   // Hydrate local categories AND images with Supabase UIDs on load
   useEffect(() => {
@@ -861,6 +1013,20 @@ export default function PhotographyPoseGuide() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
           <p className="text-gray-400">Loading your pose library...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Cloud sync loading screen
+  if (isCloudSyncing) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center max-w-md px-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-lg font-semibold mb-2">Syncing from cloud...</p>
+          <p className="text-gray-400 text-sm">{cloudSyncProgress}</p>
+          <p className="text-gray-500 text-xs mt-4">Your data is being downloaded from the cloud. This may take a moment for large libraries.</p>
         </div>
       </div>
     );

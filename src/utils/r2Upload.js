@@ -55,6 +55,51 @@ export async function uploadToR2(dataURL, filename, accessToken) {
 }
 
 /**
+ * Construct a public R2 URL for an image key.
+ * Used for cross-device sync — images are displayed directly from R2.
+ */
+export function getR2Url(r2Key) {
+  if (!r2Key) return null;
+  return `${R2_WORKER_URL}/${r2Key}`;
+}
+
+/**
+ * Fetch an image from R2 with authentication and return as a data URL.
+ * Used when the R2 worker requires auth for GET requests.
+ * @param {string} r2Key - The R2 object key
+ * @param {string} accessToken - Supabase session access token
+ * @returns {Promise<{ok: boolean, dataURL?: string, error?: string}>}
+ */
+export async function fetchFromR2(r2Key, accessToken) {
+  if (!r2Key || !accessToken) {
+    return { ok: false, error: 'Missing r2Key or accessToken' };
+  }
+
+  try {
+    const response = await fetch(`${R2_WORKER_URL}/${r2Key}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      return { ok: false, error: `HTTP ${response.status}: ${response.statusText}` };
+    }
+
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ ok: true, dataURL: reader.result });
+      reader.onerror = () => resolve({ ok: false, error: 'Failed to read blob' });
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
  * Upload multiple images to R2 in the background
  * @param {Array<{src: string, filename: string}>} images - Images to upload
  * @param {string} accessToken - Supabase session access token
