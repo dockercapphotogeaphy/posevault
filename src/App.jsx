@@ -183,6 +183,13 @@ export default function PhotographyPoseGuide() {
         await mergeCloudIntoLocal(supabaseCategories, supabaseImages, imagesByCategoryUid, imageTagsLookup, accessToken, userId);
       }
 
+      // After pull/merge, retry any local images that failed to upload to R2/Supabase
+      setCloudSyncProgress('Checking for unsynced local images...');
+      const retriedCount = await retryFailedUploads();
+      if (retriedCount > 0) {
+        console.log(`Retried ${retriedCount} failed/pending uploads during sync`);
+      }
+
       setHasSyncedOnce(true);
       setCloudSyncProgress('');
       setIsCloudSyncing(false);
@@ -937,6 +944,83 @@ export default function PhotographyPoseGuide() {
     // Force save to IndexedDB after all uploads complete to prevent data loss
     await forceSave();
     console.log(`Background R2 upload complete: ${images.length} images processed`);
+  };
+
+  // Retry any images stuck in 'failed' or 'pending' r2Status that have local src data
+  const retryFailedUploads = async () => {
+    const userId = session?.user?.id;
+    const accessToken = session?.access_token;
+    if (!userId || !accessToken) return 0;
+
+    const allCategories = categoriesRef.current;
+    let retried = 0;
+
+    for (const cat of allCategories) {
+      if (!cat.images || cat.images.length === 0) continue;
+
+      for (let imgIdx = 0; imgIdx < cat.images.length; imgIdx++) {
+        const img = cat.images[imgIdx];
+
+        // Skip images that are already uploaded or have no local data to upload
+        if (!img.src || img.r2Status === 'uploaded' || img.r2Status === 'uploading') continue;
+        // Only retry images that failed or are still pending (have src but no r2Key)
+        if (img.r2Key) continue;
+
+        retried++;
+        console.log(`Retrying upload for image ${imgIdx} in category "${cat.name}" (status: ${img.r2Status})`);
+        updateImage(cat.id, imgIdx, { r2Status: 'uploading' });
+
+        try {
+          const filename = img.poseName || `image-${imgIdx}`;
+          const result = await uploadSingleToR2WithRetry(img.src, filename, accessToken);
+
+          if (result.ok) {
+            updateImage(cat.id, imgIdx, {
+              r2Key: result.key,
+              r2Status: 'uploaded',
+              size: result.size || 0
+            });
+            console.log(`Retry upload successful: ${result.key}`);
+
+            // Create Supabase record if category has a UID
+            const categorySupabaseUid = categoriesRef.current.find(c => c.id === cat.id)?.supabaseUid;
+            if (categorySupabaseUid) {
+              const supabaseResult = await createImageInSupabase(
+                {
+                  r2Key: result.key,
+                  size: result.size,
+                  poseName: img.poseName || filename,
+                  notes: img.notes || '',
+                  isFavorite: img.isFavorite || false,
+                },
+                categorySupabaseUid,
+                userId
+              );
+
+              if (supabaseResult.ok) {
+                updateImage(cat.id, imgIdx, { supabaseUid: supabaseResult.uid });
+                console.log(`Retry Supabase record created: ${supabaseResult.uid}`);
+                updateUserStorage(userId, result.size);
+              } else {
+                console.error('Retry Supabase create failed:', supabaseResult.error);
+              }
+            }
+          } else {
+            updateImage(cat.id, imgIdx, { r2Status: 'failed' });
+            console.error(`Retry upload failed for image ${imgIdx} in "${cat.name}"`);
+          }
+        } catch (err) {
+          updateImage(cat.id, imgIdx, { r2Status: 'failed' });
+          console.error(`Retry upload error for image ${imgIdx} in "${cat.name}":`, err);
+        }
+      }
+    }
+
+    if (retried > 0) {
+      await forceSave();
+      console.log(`Retry cycle complete: ${retried} images attempted`);
+    }
+    return retried;
   };
 
   // Wrapper that updates locally AND syncs to Supabase
