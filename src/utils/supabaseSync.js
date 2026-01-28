@@ -131,6 +131,7 @@ export async function createImage(imageData, categoryUid, userId) {
         r2_key: imageData.r2Key,
         category_uid: categoryUid,
         user_id: userId,
+        cover_image: imageData.isCover || false,
       })
       .select('uid')
       .single();

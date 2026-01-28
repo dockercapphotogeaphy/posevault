@@ -292,6 +292,7 @@ export default function PhotographyPoseGuide() {
         poseName: img.name || '',
         notes: img.notes || '',
         isFavorite: img.favorite || false,
+        isCover: img.cover_image || false,
         tags: imageTagsLookup[img.uid] || [],
         dateAdded: img.created_at || new Date().toISOString(),
         r2Key: img.r2_key || null,
@@ -363,6 +364,7 @@ export default function PhotographyPoseGuide() {
         poseName: img.name || '',
         notes: img.notes || '',
         isFavorite: img.favorite || false,
+        isCover: img.cover_image || false,
         tags: imageTagsLookup[img.uid] || [],
         dateAdded: img.created_at || new Date().toISOString(),
         r2Key: img.r2_key || null,
@@ -432,6 +434,7 @@ export default function PhotographyPoseGuide() {
           poseName: img.name || '',
           notes: img.notes || '',
           isFavorite: img.favorite || false,
+          isCover: img.cover_image || false,
           tags: imageTagsLookup[img.uid] || [],
           dateAdded: img.created_at || new Date().toISOString(),
           r2Key: img.r2_key || null,
@@ -459,11 +462,13 @@ export default function PhotographyPoseGuide() {
         const cloudName = cloudImg.name || '';
         const cloudNotes = cloudImg.notes || '';
         const cloudFav = cloudImg.favorite || false;
+        const cloudCover = cloudImg.cover_image || false;
         const cloudTags = imageTagsLookup[cloudImg.uid] || [];
 
         if (cloudName !== localImg.poseName) imgUpdates.poseName = cloudName;
         if (cloudNotes !== localImg.notes) imgUpdates.notes = cloudNotes;
         if (cloudFav !== localImg.isFavorite) imgUpdates.isFavorite = cloudFav;
+        if (cloudCover !== (localImg.isCover || false)) imgUpdates.isCover = cloudCover;
         if (JSON.stringify(cloudTags.sort()) !== JSON.stringify((localImg.tags || []).sort())) {
           imgUpdates.tags = cloudTags;
         }
@@ -737,6 +742,7 @@ export default function PhotographyPoseGuide() {
           poseName: filename,
           notes: 'Cover image',
           isFavorite: false,
+          isCover: true,
         },
         categoryUid,
         userId
