@@ -938,11 +938,19 @@ export default function PhotographyPoseGuide() {
             );
 
             if (supabaseResult.ok) {
-              // Store the Supabase UID locally
+              // Generate friendly poseName: "Category Name - UID"
+              const category = categoriesRef.current.find(c => c.id === categoryId);
+              const friendlyName = `${category?.name || 'Image'} - ${supabaseResult.uid}`;
+
+              // Store the Supabase UID and friendly poseName locally
               updateImage(categoryId, imageIndex, {
-                supabaseUid: supabaseResult.uid
+                supabaseUid: supabaseResult.uid,
+                poseName: friendlyName
               });
-              console.log(`Supabase image created: ${supabaseResult.uid}`);
+              console.log(`Supabase image created: ${supabaseResult.uid}, named: ${friendlyName}`);
+
+              // Update Supabase with the friendly poseName
+              updateImageInSupabase(supabaseResult.uid, { poseName: friendlyName }, userId);
 
               // Update user storage tracking
               updateUserStorage(userId, result.size);
@@ -1028,8 +1036,18 @@ export default function PhotographyPoseGuide() {
               );
 
               if (supabaseResult.ok) {
-                updateImage(cat.id, imgIdx, { supabaseUid: supabaseResult.uid });
-                console.log(`Retry Supabase record created: ${supabaseResult.uid}`);
+                // Generate friendly poseName: "Category Name - UID"
+                const friendlyName = `${cat.name || 'Image'} - ${supabaseResult.uid}`;
+
+                updateImage(cat.id, imgIdx, {
+                  supabaseUid: supabaseResult.uid,
+                  poseName: friendlyName
+                });
+                console.log(`Retry Supabase record created: ${supabaseResult.uid}, named: ${friendlyName}`);
+
+                // Update Supabase with the friendly poseName
+                updateImageInSupabase(supabaseResult.uid, { poseName: friendlyName }, userId);
+
                 updateUserStorage(userId, result.size);
               } else {
                 console.error('Retry Supabase create failed:', supabaseResult.error);
