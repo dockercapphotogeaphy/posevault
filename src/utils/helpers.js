@@ -81,6 +81,13 @@ export const getDisplayedImages = (category, filters) => {
     sorted = sorted.filter(img => img.isFavorite);
   }
   
+  // Helper to safely parse date, returns 0 for invalid/missing dates
+  const getDateValue = (dateStr) => {
+    if (!dateStr) return 0;
+    const timestamp = new Date(dateStr).getTime();
+    return isNaN(timestamp) ? 0 : timestamp;
+  };
+
   // Finally sort based on selected option
   if (sortBy === 'favorites') {
     sorted.sort((a, b) => {
@@ -89,9 +96,9 @@ export const getDisplayedImages = (category, filters) => {
       return 0;
     });
   } else if (sortBy === 'dateAdded') {
-    sorted.sort((a, b) => new Date(b.dateAdded) - new Date(a.dateAdded));
+    sorted.sort((a, b) => getDateValue(b.dateAdded) - getDateValue(a.dateAdded)); // Newest first
   } else if (sortBy === 'dateAddedOldest') {
-    sorted.sort((a, b) => new Date(a.dateAdded) - new Date(b.dateAdded));
+    sorted.sort((a, b) => getDateValue(a.dateAdded) - getDateValue(b.dateAdded)); // Oldest first
   }
 
   return sorted;

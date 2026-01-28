@@ -457,12 +457,17 @@ export default function PhotographyPoseGuide() {
         const cloudNotes = cloudImg.notes || '';
         const cloudFav = cloudImg.favorite || false;
         const cloudTags = imageTagsLookup[cloudImg.uid] || [];
+        const cloudCreatedAt = cloudImg.created_at || null;
 
         if (cloudName !== localImg.poseName) imgUpdates.poseName = cloudName;
         if (cloudNotes !== localImg.notes) imgUpdates.notes = cloudNotes;
         if (cloudFav !== localImg.isFavorite) imgUpdates.isFavorite = cloudFav;
         if (JSON.stringify(cloudTags.sort()) !== JSON.stringify((localImg.tags || []).sort())) {
           imgUpdates.tags = cloudTags;
+        }
+        // Sync dateAdded from cloud's created_at if local is missing or different
+        if (cloudCreatedAt && cloudCreatedAt !== localImg.dateAdded) {
+          imgUpdates.dateAdded = cloudCreatedAt;
         }
 
         if (Object.keys(imgUpdates).length > 0) {
