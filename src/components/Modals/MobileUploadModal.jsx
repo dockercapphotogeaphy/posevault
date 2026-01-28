@@ -6,8 +6,23 @@ export default function MobileUploadModal({ categoryId, onUpload, onClose }) {
   const galleryInputRef = useRef(null);
   const filesInputRef = useRef(null);
 
-  const handleFileChange = (e) => {
+  const handleFileChange = (e, filterImages = false) => {
     if (e.target.files && e.target.files.length > 0) {
+      if (filterImages) {
+        // Filter to only include image files when using file browser
+        const imageFiles = Array.from(e.target.files).filter(file =>
+          file.type.startsWith('image/') ||
+          /\.(png|jpe?g|webp|gif|heic|heif)$/i.test(file.name)
+        );
+        if (imageFiles.length === 0) {
+          alert('Please select image files only.');
+          return;
+        }
+        // Create a new FileList-like object with only images
+        const dataTransfer = new DataTransfer();
+        imageFiles.forEach(file => dataTransfer.items.add(file));
+        e.target.files = dataTransfer.files;
+      }
       onUpload(e, categoryId);
       onClose();
     }
@@ -112,9 +127,9 @@ export default function MobileUploadModal({ categoryId, onUpload, onClose }) {
         <input
           ref={filesInputRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,.png,.jpg,.jpeg,.webp,.gif,.heic,.heif"
+          accept="*/*"
           multiple
-          onChange={handleFileChange}
+          onChange={(e) => handleFileChange(e, true)}
           className="hidden"
         />
       </div>
