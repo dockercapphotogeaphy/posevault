@@ -2,11 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Heart, Camera, Images, Settings } from 'lucide-react';
 import CategorySettingsDropdown from './Modals/CategorySettingsDropdown';
 
-export default function CategoryCard({ 
-  category, 
-  onOpen, 
-  onToggleFavorite, 
+export default function CategoryCard({
+  category,
+  onOpen,
+  onToggleFavorite,
   onUploadImages,
+  onShowMobileUpload,
   onEditSettings,
   onUploadCover,
   onDelete,
@@ -17,6 +18,24 @@ export default function CategoryCard({
   const [dropdownAlignTop, setDropdownAlignTop] = useState(false);
   const dropdownRef = useRef(null);
   const settingsButtonRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // Detect mobile device
+  const isMobile = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      || window.innerWidth < 768;
+  };
+
+  // Handle upload button click - show modal on mobile, trigger file input on desktop
+  const handleUploadClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isMobile() && onShowMobileUpload) {
+      onShowMobileUpload(category.id);
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -117,41 +136,34 @@ export default function CategoryCard({
         </p>
         
         <div className="space-y-2 relative pb-10 md:pb-12">
-          <label className="block cursor-pointer">
-            <input
-              type="file"
-              multiple
-              accept="image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,.png,.jpg,.jpeg,.webp,.gif,.heic,.heif"
-              onChange={(e) => onUploadImages(e, category.id)}
-              className="hidden"
-              id={`upload-${category.id}`}
-            />
-            <div 
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const input = document.getElementById(`upload-${category.id}`);
-                if (input) input.click();
-              }}
-              className="text-center py-1.5 md:py-2 rounded-lg text-xs md:text-sm flex items-center justify-center gap-1.5 md:gap-2 text-white cursor-pointer"
-              style={{
-                background: 'linear-gradient(to right, #2563eb, #3b82f6)',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                transition: 'all 0.2s ease-in-out'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'linear-gradient(to right, #1d4ed8, #2563eb)';
-                e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'linear-gradient(to right, #2563eb, #3b82f6)';
-                e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)';
-              }}
-            >
-              <Images size={14} className="md:w-4 md:h-4" />
-              <span>Add Pose Images</span>
-            </div>
-          </label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,.png,.jpg,.jpeg,.webp,.gif,.heic,.heif"
+            onChange={(e) => onUploadImages(e, category.id)}
+            className="hidden"
+          />
+          <button
+            onClick={handleUploadClick}
+            className="w-full text-center py-1.5 md:py-2 rounded-lg text-xs md:text-sm flex items-center justify-center gap-1.5 md:gap-2 text-white cursor-pointer"
+            style={{
+              background: 'linear-gradient(to right, #2563eb, #3b82f6)',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+              transition: 'all 0.2s ease-in-out'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(to right, #1d4ed8, #2563eb)';
+              e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(to right, #2563eb, #3b82f6)';
+              e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)';
+            }}
+          >
+            <Images size={14} className="md:w-4 md:h-4" />
+            <span>Add Pose Images</span>
+          </button>
 
           {/* Settings button with dropdown */}
           <div className="absolute bottom-1 right-1 md:bottom-2 md:right-2">

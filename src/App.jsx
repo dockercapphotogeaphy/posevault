@@ -17,6 +17,7 @@ import BulkEditModal from './components/Modals/BulkEditModal';
 import UploadProgressModal from './components/Modals/UploadProgressModal';
 import PrivateGalleryWarning from './components/Modals/PrivateGalleryWarning';
 import PDFOptionsModal from './components/Modals/PDFOptionsModal';
+import MobileUploadModal from './components/Modals/MobileUploadModal';
 
 // Hooks & Utils
 import { useAuth } from './hooks/useAuth';
@@ -88,6 +89,7 @@ export default function PhotographyPoseGuide() {
   const [editingImage, setEditingImage] = useState(null);
   const [showTagFilterModal, setShowTagFilterModal] = useState(false);
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [showMobileUploadModal, setShowMobileUploadModal] = useState(null); // stores categoryId when open
   const [pendingPrivateCategory, setPendingPrivateCategory] = useState(null);
   const [pdfCategory, setPdfCategory] = useState(null);
 
@@ -1560,6 +1562,7 @@ export default function PhotographyPoseGuide() {
           onOpenCategory={handleOpenCategory}
           onToggleFavorite={toggleCategoryFavoriteWithSync}
           onUploadImages={handleImagesUpload}
+          onShowMobileUpload={(categoryId) => setShowMobileUploadModal(categoryId)}
           onEditSettings={(catId) => setEditingCategory(catId)}
           onUploadCover={handleCoverUpload}
           onDelete={(catId) => {
@@ -1584,6 +1587,7 @@ export default function PhotographyPoseGuide() {
           selectedImages={selectedImages}
           dropdownRef={dropdownRef}
           onUploadImages={handleImagesUpload}
+          onShowMobileUpload={(categoryId) => setShowMobileUploadModal(categoryId)}
           onSetSortBy={handleSetSortBy}
           onShowTagFilter={() => setShowTagFilterModal(true)}
           onSearchChange={setSearchTerm}
@@ -1736,6 +1740,15 @@ export default function PhotographyPoseGuide() {
         <PDFOptionsModal
           category={pdfCategory}
           onClose={() => setPdfCategory(null)}
+        />
+      )}
+
+      {/* Mobile Upload Modal */}
+      {showMobileUploadModal && (
+        <MobileUploadModal
+          categoryId={showMobileUploadModal}
+          onUpload={handleImagesUpload}
+          onClose={() => setShowMobileUploadModal(null)}
         />
       )}
     </div>
