@@ -1414,7 +1414,14 @@ export default function PhotographyPoseGuide() {
 
           // Sync metadata updates (notes, favorites)
           const metaUpdates = {};
-          if (bulkUpdates.notes !== undefined) metaUpdates.notes = bulkUpdates.notes;
+          if (bulkUpdates.notes !== undefined) {
+            // Handle append vs replace mode for notes
+            if (bulkUpdates.notesMode === 'append' && image.notes) {
+              metaUpdates.notes = `${image.notes}\n${bulkUpdates.notes}`;
+            } else {
+              metaUpdates.notes = bulkUpdates.notes;
+            }
+          }
           if (bulkUpdates.isFavorite !== undefined) metaUpdates.isFavorite = bulkUpdates.isFavorite;
 
           if (Object.keys(metaUpdates).length > 0) {
