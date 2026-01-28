@@ -111,6 +111,7 @@ export default function PhotographyPoseGuide() {
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
   const [cloudSyncProgress, setCloudSyncProgress] = useState('');
   const [isInitialSync, setIsInitialSync] = useState(true); // true = show full-screen, false = background sync
+  const [hasSyncedOnce, setHasSyncedOnce] = useState(false); // true after first successful sync
   const cloudSyncAttemptedRef = useRef(false);
   const cleanupAttemptedRef = useRef(false);
 
@@ -157,6 +158,7 @@ export default function PhotographyPoseGuide() {
 
       if (cloudData.categories.length === 0) {
         console.log('No cloud data found for this user');
+        setHasSyncedOnce(true);
         setIsCloudSyncing(false);
         setCloudSyncProgress('');
         return;
@@ -181,6 +183,7 @@ export default function PhotographyPoseGuide() {
         await mergeCloudIntoLocal(supabaseCategories, supabaseImages, imagesByCategoryUid, imageTagsLookup, accessToken, userId);
       }
 
+      setHasSyncedOnce(true);
       setCloudSyncProgress('');
       setIsCloudSyncing(false);
     } catch (err) {
@@ -1378,6 +1381,7 @@ export default function PhotographyPoseGuide() {
         isUploading={showUploadProgress}
         isSaving={isSaving}
         isSyncing={isCloudSyncing}
+        isSynced={hasSyncedOnce && !isCloudSyncing}
       />
 
       {viewMode === 'categories' && (

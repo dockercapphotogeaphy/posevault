@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, Plus, Upload, RefreshCw } from 'lucide-react';
+import { ChevronLeft, Plus, Upload, CloudSync, CloudCheck } from 'lucide-react';
 import UserMenu from './UserMenu';
 
 export default function Header({
@@ -13,7 +13,8 @@ export default function Header({
   onLogout,
   isUploading = false,
   isSaving = false,
-  isSyncing = false
+  isSyncing = false,
+  isSynced = false
 }) {
   return (
     <div className="bg-gray-800 border-b border-gray-700 p-3 md:p-4">
@@ -69,14 +70,20 @@ export default function Header({
             <button
               onClick={onSync}
               disabled={isSyncing}
-              title={isSyncing ? 'Syncing...' : 'Sync from cloud'}
+              title={isSyncing ? 'Syncing...' : isSynced ? 'Synced — tap to re-sync' : 'Sync from cloud'}
               className={`p-2 rounded-lg transition-colors cursor-pointer ${
                 isSyncing
                   ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-700 hover:bg-gray-600 text-white'
+                  : isSynced
+                    ? 'bg-gray-700 hover:bg-gray-600 text-green-400'
+                    : 'bg-gray-700 hover:bg-gray-600 text-white'
               }`}
             >
-              <RefreshCw size={18} className={`md:w-5 md:h-5 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSynced && !isSyncing ? (
+                <CloudCheck size={18} className="md:w-5 md:h-5" />
+              ) : (
+                <CloudSync size={18} className={`md:w-5 md:h-5 ${isSyncing ? 'animate-spin' : ''}`} />
+              )}
             </button>
           )}
           <UserMenu onLogout={onLogout} isUploading={isUploading} isSaving={isSaving} />
