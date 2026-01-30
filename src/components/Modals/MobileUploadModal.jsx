@@ -1,28 +1,12 @@
 import React, { useRef } from 'react';
-import { X, Camera, Image, FolderOpen } from 'lucide-react';
+import { X, Camera, Image } from 'lucide-react';
 
 export default function MobileUploadModal({ categoryId, onUpload, onClose }) {
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
-  const filesInputRef = useRef(null);
 
-  const handleFileChange = (e, filterImages = false) => {
+  const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
-      if (filterImages) {
-        // Filter to only include image files when using file browser
-        const imageFiles = Array.from(e.target.files).filter(file =>
-          file.type.startsWith('image/') ||
-          /\.(png|jpe?g|webp|gif|heic|heif)$/i.test(file.name)
-        );
-        if (imageFiles.length === 0) {
-          alert('Please select image files only.');
-          return;
-        }
-        // Create a new FileList-like object with only images
-        const dataTransfer = new DataTransfer();
-        imageFiles.forEach(file => dataTransfer.items.add(file));
-        e.target.files = dataTransfer.files;
-      }
       onUpload(e, categoryId);
       onClose();
     }
@@ -34,10 +18,6 @@ export default function MobileUploadModal({ categoryId, onUpload, onClose }) {
 
   const triggerGallery = () => {
     galleryInputRef.current?.click();
-  };
-
-  const triggerFiles = () => {
-    filesInputRef.current?.click();
   };
 
   return (
@@ -81,27 +61,13 @@ export default function MobileUploadModal({ categoryId, onUpload, onClose }) {
               <p className="text-sm text-gray-400">Choose from your photos</p>
             </div>
           </button>
-
-          {/* Browse Files Option */}
-          <button
-            onClick={triggerFiles}
-            className="w-full flex items-center gap-4 p-4 bg-gray-700 hover:bg-gray-600 rounded-xl transition-colors cursor-pointer"
-          >
-            <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
-              <FolderOpen size={24} />
-            </div>
-            <div className="text-left">
-              <p className="font-medium">Browse Files</p>
-              <p className="text-sm text-gray-400">Select from file manager</p>
-            </div>
-          </button>
         </div>
 
         {/* Cancel Button */}
         <div className="p-4 border-t border-gray-700">
           <button
             onClick={onClose}
-            className="w-full py-3 bg-gray-700 hover:bg-gray-600 rounded-xl transition-colors font-medium cursor-pointer"
+            className="w-full py-3 bg-red-600 hover:bg-red-700 rounded-xl transition-colors font-medium cursor-pointer"
           >
             Cancel
           </button>
@@ -122,14 +88,6 @@ export default function MobileUploadModal({ categoryId, onUpload, onClose }) {
           accept="image/*"
           multiple
           onChange={handleFileChange}
-          className="hidden"
-        />
-        <input
-          ref={filesInputRef}
-          type="file"
-          accept="*/*"
-          multiple
-          onChange={(e) => handleFileChange(e, true)}
           className="hidden"
         />
       </div>
