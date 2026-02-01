@@ -20,6 +20,10 @@ export default function CategoryCard({
   const settingsButtonRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  // Filter out cover images from gallery counts
+  const galleryImages = category.images.filter(img => !img.isCover);
+  const hasGalleryImages = galleryImages.length > 0;
+
   // Detect mobile device
   const isMobile = () => {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -88,23 +92,23 @@ export default function CategoryCard({
           </button>
 
           <div
-            onClick={() => category.images.length > 0 && onOpen(category)}
-            className={`aspect-[4/3] bg-gray-700 relative group ${category.images.length > 0 ? 'cursor-pointer' : ''}`}
+            onClick={() => hasGalleryImages && onOpen(category)}
+            className={`aspect-[4/3] bg-gray-700 relative group ${hasGalleryImages ? 'cursor-pointer' : ''}`}
           >
             <img
               src={category.cover}
               alt={category.name}
               className="w-full h-full object-cover rounded-t-xl"
             />
-            {category.images.length > 0 && (
+            {hasGalleryImages && (
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all" />
             )}
           </div>
         </>
       ) : (
         <div
-          onClick={() => category.images.length > 0 && onOpen(category)}
-          className={`bg-gray-700 py-6 md:py-8 flex items-center justify-center gap-2 md:gap-3 aspect-[4/3] rounded-t-xl ${category.images.length > 0 ? 'cursor-pointer hover:bg-gray-600' : ''} transition-colors`}
+          onClick={() => hasGalleryImages && onOpen(category)}
+          className={`bg-gray-700 py-6 md:py-8 flex items-center justify-center gap-2 md:gap-3 aspect-[4/3] rounded-t-xl ${hasGalleryImages ? 'cursor-pointer hover:bg-gray-600' : ''} transition-colors`}
         >
           <Camera size={20} className="text-gray-400 md:w-6 md:h-6" />
           <span className="text-gray-400 font-medium text-sm md:text-base">No Cover Photo</span>
@@ -132,7 +136,7 @@ export default function CategoryCard({
           )}
         </div>
         <p className="text-xs md:text-sm text-gray-400 mb-3">
-          {category.images.length} poses • {category.images.filter(img => img.isFavorite).length} favorites
+          {galleryImages.length} poses • {galleryImages.filter(img => img.isFavorite).length} favorites
         </p>
         
         <div className="space-y-2 relative pb-10 md:pb-12">

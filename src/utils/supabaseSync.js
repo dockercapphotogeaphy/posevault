@@ -822,6 +822,46 @@ export async function runCleanup(userId, accessToken, deleteR2File) {
     console.log(`Cleanup: found ${categoriesToClean.length} soft-deleted categories`);
 
     for (const cat of categoriesToClean) {
+      // First, find and delete all child images (even if not soft-deleted)
+      // This ensures no foreign key constraint violations
+      const { data: childImages } = await supabase
+        .from('images')
+        .select('uid, r2_key, image_size')
+        .eq('category_uid', cat.uid)
+        .eq('user_id', userId);
+
+      if (childImages && childImages.length > 0) {
+        console.log(`Cleanup: category ${cat.uid} has ${childImages.length} child images to delete`);
+        
+        for (const img of childImages) {
+          // Delete R2 file if it exists and wasn't already deleted
+          if (img.r2_key && deleteR2File) {
+            const r2Result = await deleteR2File(img.r2_key, accessToken);
+            if (!r2Result.ok) {
+              // Log but don't fail - file might already be deleted
+              console.log(`R2 delete skipped/failed for ${img.r2_key}: ${r2Result.error}`);
+            }
+          }
+
+          // Delete image_tags
+          await supabase
+            .from('image_tags')
+            .delete()
+            .eq('image_uid', img.uid);
+
+          // Hard-delete the image
+          const { error: imgDeleteErr } = await supabase
+            .from('images')
+            .delete()
+            .eq('uid', img.uid)
+            .eq('user_id', userId);
+
+          if (!imgDeleteErr) {
+            freedBytes += img.image_size || 0;
+          }
+        }
+      }
+
       // Delete category_tags entries
       const { error: ctDeleteErr } = await supabase
         .from('category_tags')
