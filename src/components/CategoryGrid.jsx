@@ -15,6 +15,7 @@ export default function CategoryGrid({
   onOpenCategory,
   onToggleFavorite,
   onUploadImages,
+  onShowMobileUpload,
   onEditSettings,
   onUploadCover,
   onDelete,
@@ -90,6 +91,7 @@ export default function CategoryGrid({
               onOpen={onOpenCategory}
               onToggleFavorite={onToggleFavorite}
               onUploadImages={onUploadImages}
+              onShowMobileUpload={onShowMobileUpload}
               onEditSettings={onEditSettings}
               onUploadCover={onUploadCover}
               onDelete={onDelete}

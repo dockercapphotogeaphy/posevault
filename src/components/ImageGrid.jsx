@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Heart, Grid3x3, ChevronDown, Filter, CopyCheck, CopyX, SquarePen, Images, Upload, Search, X as XIcon } from 'lucide-react';
 import ImageCard from './ImageCard';
 import { getGridColsClass } from '../utils/helpers';
@@ -17,6 +17,7 @@ export default function ImageGrid({
   selectedImages,
   dropdownRef,
   onUploadImages,
+  onShowMobileUpload,
   onSetSortBy,
   onShowTagFilter,
   onSearchChange,
@@ -31,6 +32,22 @@ export default function ImageGrid({
   onStartBulkSelect
 }) {
   const gridColsClass = getGridColsClass(gridColumns);
+  const fileInputRef = useRef(null);
+
+  // Detect mobile device
+  const isMobile = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      || window.innerWidth < 768;
+  };
+
+  // Handle upload button click - show modal on mobile, trigger file input on desktop
+  const handleUploadClick = () => {
+    if (isMobile() && onShowMobileUpload) {
+      onShowMobileUpload(category.id);
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
 
   if (!category) return null;
 
@@ -40,34 +57,34 @@ export default function ImageGrid({
         <div className="text-center py-20 text-gray-400">
           <Upload size={64} className="mx-auto mb-4 opacity-50" />
           <p className="text-lg">No poses in this category yet</p>
-          <label className="inline-block mt-4 cursor-pointer">
-            <input
-              type="file"
-              multiple
-              accept="image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,.png,.jpg,.jpeg,.webp,.gif,.heic,.heif"
-              onChange={(e) => onUploadImages(e, category.id)}
-              className="hidden"
-            />
-            <div 
-              className="px-6 py-3 rounded-lg inline-flex items-center gap-2 text-white"
-              style={{
-                background: 'linear-gradient(to right, #2563eb, #3b82f6)',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                transition: 'all 0.2s ease-in-out'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'linear-gradient(to right, #1d4ed8, #2563eb)';
-                e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'linear-gradient(to right, #2563eb, #3b82f6)';
-                e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)';
-              }}
-            >
-              <Images size={20} />
-              <span>Upload Poses</span>
-            </div>
-          </label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,.png,.jpg,.jpeg,.webp,.gif,.heic,.heif"
+            onChange={(e) => onUploadImages(e, category.id)}
+            className="hidden"
+          />
+          <button
+            onClick={handleUploadClick}
+            className="mt-4 px-6 py-3 rounded-lg inline-flex items-center gap-2 text-white cursor-pointer"
+            style={{
+              background: 'linear-gradient(to right, #2563eb, #3b82f6)',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+              transition: 'all 0.2s ease-in-out'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(to right, #1d4ed8, #2563eb)';
+              e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(to right, #2563eb, #3b82f6)';
+              e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)';
+            }}
+          >
+            <Images size={20} />
+            <span>Upload Poses</span>
+          </button>
         </div>
       </div>
     );

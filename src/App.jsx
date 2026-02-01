@@ -17,6 +17,7 @@ import BulkEditModal from './components/Modals/BulkEditModal';
 import UploadProgressModal from './components/Modals/UploadProgressModal';
 import PrivateGalleryWarning from './components/Modals/PrivateGalleryWarning';
 import PDFOptionsModal from './components/Modals/PDFOptionsModal';
+import MobileUploadModal from './components/Modals/MobileUploadModal';
 
 // Hooks & Utils
 import { useAuth } from './hooks/useAuth';
@@ -88,6 +89,7 @@ export default function PhotographyPoseGuide() {
   const [editingImage, setEditingImage] = useState(null);
   const [showTagFilterModal, setShowTagFilterModal] = useState(false);
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [showMobileUploadModal, setShowMobileUploadModal] = useState(null); // stores categoryId when open
   const [pendingPrivateCategory, setPendingPrivateCategory] = useState(null);
   const [pdfCategory, setPdfCategory] = useState(null);
 
@@ -292,6 +294,7 @@ export default function PhotographyPoseGuide() {
         poseName: img.name || '',
         notes: img.notes || '',
         isFavorite: img.favorite || false,
+        isCover: img.cover_image || false,
         tags: imageTagsLookup[img.uid] || [],
         dateAdded: img.created_at || new Date().toISOString(),
         r2Key: img.r2_key || null,
@@ -312,6 +315,7 @@ export default function PhotographyPoseGuide() {
         id: catIdx + 1,
         name: cat.name,
         cover: coverSrc,
+        coverImageUid: cat.cover_image_uid || null,
         images: localImages,
         isFavorite: cat.favorite || false,
         notes: cat.notes || '',
@@ -362,6 +366,7 @@ export default function PhotographyPoseGuide() {
         poseName: img.name || '',
         notes: img.notes || '',
         isFavorite: img.favorite || false,
+        isCover: img.cover_image || false,
         tags: imageTagsLookup[img.uid] || [],
         dateAdded: img.created_at || new Date().toISOString(),
         r2Key: img.r2_key || null,
@@ -380,6 +385,7 @@ export default function PhotographyPoseGuide() {
         id: nextId++,
         name: cloudCat.name,
         cover: coverSrc,
+        coverImageUid: cloudCat.cover_image_uid || null,
         images: localImages,
         isFavorite: cloudCat.favorite || false,
         notes: cloudCat.notes || '',
@@ -405,6 +411,7 @@ export default function PhotographyPoseGuide() {
       if ((cloudCat.favorite || false) !== localCat.isFavorite) catUpdates.isFavorite = cloudCat.favorite || false;
       if ((cloudCat.private_gallery || false) !== localCat.isPrivate) catUpdates.isPrivate = cloudCat.private_gallery || false;
       if ((cloudCat.gallery_password || null) !== localCat.privatePassword) catUpdates.privatePassword = cloudCat.gallery_password || null;
+      if ((cloudCat.cover_image_uid || null) !== localCat.coverImageUid) catUpdates.coverImageUid = cloudCat.cover_image_uid || null;
 
       if (Object.keys(catUpdates).length > 0) {
         updatedCategories[i] = { ...localCat, ...catUpdates };
@@ -429,6 +436,7 @@ export default function PhotographyPoseGuide() {
           poseName: img.name || '',
           notes: img.notes || '',
           isFavorite: img.favorite || false,
+          isCover: img.cover_image || false,
           tags: imageTagsLookup[img.uid] || [],
           dateAdded: img.created_at || new Date().toISOString(),
           r2Key: img.r2_key || null,
@@ -456,11 +464,13 @@ export default function PhotographyPoseGuide() {
         const cloudName = cloudImg.name || '';
         const cloudNotes = cloudImg.notes || '';
         const cloudFav = cloudImg.favorite || false;
+        const cloudCover = cloudImg.cover_image || false;
         const cloudTags = imageTagsLookup[cloudImg.uid] || [];
 
         if (cloudName !== localImg.poseName) imgUpdates.poseName = cloudName;
         if (cloudNotes !== localImg.notes) imgUpdates.notes = cloudNotes;
         if (cloudFav !== localImg.isFavorite) imgUpdates.isFavorite = cloudFav;
+        if (cloudCover !== (localImg.isCover || false)) imgUpdates.isCover = cloudCover;
         if (JSON.stringify(cloudTags.sort()) !== JSON.stringify((localImg.tags || []).sort())) {
           imgUpdates.tags = cloudTags;
         }
@@ -734,13 +744,17 @@ export default function PhotographyPoseGuide() {
           poseName: filename,
           notes: 'Cover image',
           isFavorite: false,
+          isCover: true,
         },
         categoryUid,
         userId
       );
 
       if (imageResult.ok) {
-        // Link cover_image_uid on the category
+        // Store coverImageUid locally so we can filter it from gallery
+        updateCategory(categoryId, { coverImageUid: imageResult.uid });
+
+        // Link cover_image_uid on the category in Supabase
         updateCategoryInSupabase(categoryUid, { coverImageUid: imageResult.uid }, userId)
           .then(res => {
             if (res.ok) {
@@ -926,11 +940,35 @@ export default function PhotographyPoseGuide() {
             );
 
             if (supabaseResult.ok) {
-              // Store the Supabase UID locally
-              updateImage(categoryId, imageIndex, {
-                supabaseUid: supabaseResult.uid
-              });
-              console.log(`Supabase image created: ${supabaseResult.uid}`);
+              // Get current image state to check if user has customized the name
+              const currentCategory = categoriesRef.current.find(c => c.id === categoryId);
+              const currentImage = currentCategory?.images[imageIndex];
+              const originalFilename = filenames[i];
+              const currentPoseName = currentImage?.poseName;
+
+              // Only set friendly name if user hasn't manually changed it from the original filename
+              const hasCustomName = currentPoseName && currentPoseName !== originalFilename;
+
+              if (hasCustomName) {
+                // User has customized the name, just store the UID
+                updateImage(categoryId, imageIndex, {
+                  supabaseUid: supabaseResult.uid
+                });
+                console.log(`Supabase image created: ${supabaseResult.uid}, keeping user name: ${currentPoseName}`);
+              } else {
+                // Generate friendly poseName: "Category Name - UID"
+                const friendlyName = `${currentCategory?.name || 'Image'} - ${supabaseResult.uid}`;
+
+                // Store the Supabase UID and friendly poseName locally
+                updateImage(categoryId, imageIndex, {
+                  supabaseUid: supabaseResult.uid,
+                  poseName: friendlyName
+                });
+                console.log(`Supabase image created: ${supabaseResult.uid}, named: ${friendlyName}`);
+
+                // Update Supabase with the friendly poseName
+                updateImageInSupabase(supabaseResult.uid, { poseName: friendlyName }, userId);
+              }
 
               // Update user storage tracking
               updateUserStorage(userId, result.size);
@@ -1016,8 +1054,30 @@ export default function PhotographyPoseGuide() {
               );
 
               if (supabaseResult.ok) {
-                updateImage(cat.id, imgIdx, { supabaseUid: supabaseResult.uid });
-                console.log(`Retry Supabase record created: ${supabaseResult.uid}`);
+                // Check if user has customized the name (not the default fallback)
+                const defaultFilename = `image-${imgIdx}`;
+                const hasCustomName = img.poseName && img.poseName !== defaultFilename;
+
+                if (hasCustomName) {
+                  // User has customized the name, just store the UID
+                  updateImage(cat.id, imgIdx, {
+                    supabaseUid: supabaseResult.uid
+                  });
+                  console.log(`Retry Supabase record created: ${supabaseResult.uid}, keeping user name: ${img.poseName}`);
+                } else {
+                  // Generate friendly poseName: "Category Name - UID"
+                  const friendlyName = `${cat.name || 'Image'} - ${supabaseResult.uid}`;
+
+                  updateImage(cat.id, imgIdx, {
+                    supabaseUid: supabaseResult.uid,
+                    poseName: friendlyName
+                  });
+                  console.log(`Retry Supabase record created: ${supabaseResult.uid}, named: ${friendlyName}`);
+
+                  // Update Supabase with the friendly poseName
+                  updateImageInSupabase(supabaseResult.uid, { poseName: friendlyName }, userId);
+                }
+
                 updateUserStorage(userId, result.size);
               } else {
                 console.error('Retry Supabase create failed:', supabaseResult.error);
@@ -1354,7 +1414,14 @@ export default function PhotographyPoseGuide() {
 
           // Sync metadata updates (notes, favorites)
           const metaUpdates = {};
-          if (bulkUpdates.notes !== undefined) metaUpdates.notes = bulkUpdates.notes;
+          if (bulkUpdates.notes !== undefined) {
+            // Handle append vs replace mode for notes
+            if (bulkUpdates.notesMode === 'append' && image.notes) {
+              metaUpdates.notes = `${image.notes}\n${bulkUpdates.notes}`;
+            } else {
+              metaUpdates.notes = bulkUpdates.notes;
+            }
+          }
           if (bulkUpdates.isFavorite !== undefined) metaUpdates.isFavorite = bulkUpdates.isFavorite;
 
           if (Object.keys(metaUpdates).length > 0) {
@@ -1502,6 +1569,7 @@ export default function PhotographyPoseGuide() {
           onOpenCategory={handleOpenCategory}
           onToggleFavorite={toggleCategoryFavoriteWithSync}
           onUploadImages={handleImagesUpload}
+          onShowMobileUpload={(categoryId) => setShowMobileUploadModal(categoryId)}
           onEditSettings={(catId) => setEditingCategory(catId)}
           onUploadCover={handleCoverUpload}
           onDelete={(catId) => {
@@ -1526,6 +1594,7 @@ export default function PhotographyPoseGuide() {
           selectedImages={selectedImages}
           dropdownRef={dropdownRef}
           onUploadImages={handleImagesUpload}
+          onShowMobileUpload={(categoryId) => setShowMobileUploadModal(categoryId)}
           onSetSortBy={handleSetSortBy}
           onShowTagFilter={() => setShowTagFilterModal(true)}
           onSearchChange={setSearchTerm}
@@ -1678,6 +1747,15 @@ export default function PhotographyPoseGuide() {
         <PDFOptionsModal
           category={pdfCategory}
           onClose={() => setPdfCategory(null)}
+        />
+      )}
+
+      {/* Mobile Upload Modal */}
+      {showMobileUploadModal && (
+        <MobileUploadModal
+          categoryId={showMobileUploadModal}
+          onUpload={handleImagesUpload}
+          onClose={() => setShowMobileUploadModal(null)}
         />
       )}
     </div>

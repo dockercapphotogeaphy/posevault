@@ -21,6 +21,8 @@ export default function BulkEditModal({
     if (!selectedImages || selectedImages.length === 0) return [];
     const tagSet = new Set();
     selectedImages.forEach(image => {
+      // Skip undefined images (can happen with freshly uploaded images)
+      if (!image) return;
       if (image.tags && Array.isArray(image.tags)) {
         image.tags.forEach(tag => tagSet.add(tag));
       }

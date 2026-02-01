@@ -131,6 +131,7 @@ export async function createImage(imageData, categoryUid, userId) {
         r2_key: imageData.r2Key,
         category_uid: categoryUid,
         user_id: userId,
+        cover_image: imageData.isCover || false,
       })
       .select('uid')
       .single();
@@ -194,6 +195,7 @@ export async function deleteImage(imageUid, userId) {
   }
 
   try {
+    // Soft-delete the image
     const { error } = await supabase
       .from('images')
       .update({
@@ -206,6 +208,20 @@ export async function deleteImage(imageUid, userId) {
     if (error) {
       console.error('Supabase image delete error:', error);
       return { ok: false, error: error.message };
+    }
+
+    // Also soft-delete associated image_tags
+    const { error: tagsError } = await supabase
+      .from('image_tags')
+      .update({
+        deleted_at: new Date().toISOString(),
+      })
+      .eq('image_uid', imageUid)
+      .eq('user_id', userId);
+
+    if (tagsError) {
+      console.error('Supabase image_tags delete error:', tagsError);
+      // Don't fail the whole operation, just log the error
     }
 
     console.log('Image soft-deleted in Supabase:', imageUid);

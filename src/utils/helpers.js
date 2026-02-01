@@ -41,7 +41,8 @@ export const getDisplayedImages = (category, filters) => {
 
   if (!category) return [];
 
-  let sorted = [...category.images];
+  // Filter out cover images from the gallery display
+  let sorted = category.images.filter(img => !img.isCover);
 
   // Filter by search term first
   if (searchTerm && searchTerm.trim()) {
