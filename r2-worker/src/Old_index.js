@@ -140,7 +140,7 @@ export default {
         );
       }
 
-      const key = `users/${userId}/${file.name}`;
+      const key = `users/${userId}/${crypto.randomUUID()}-${file.name}`;
       try {
         await env.MY_BUCKET.put(key, file.stream(), {
           httpMetadata: { contentType: file.type },

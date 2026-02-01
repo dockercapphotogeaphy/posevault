@@ -115,7 +115,6 @@ export default function PhotographyPoseGuide() {
   const [isInitialSync, setIsInitialSync] = useState(true); // true = show full-screen, false = background sync
   const [hasSyncedOnce, setHasSyncedOnce] = useState(false); // true after first successful sync
   const cloudSyncAttemptedRef = useRef(false);
-  const cleanupAttemptedRef = useRef(false);
 
   // Refs
   const dropdownRef = useRef(null);
@@ -156,31 +155,66 @@ export default function PhotographyPoseGuide() {
   // ==========================================
   // CROSS-DEVICE SYNC: Pull from cloud on every load and merge
   // ==========================================
-  const syncFromCloud = async ({ isInitial = true } = {}) => {
+  const syncFromCloud = async ({ isInitial = true, silent = false } = {}) => {
     if (!session?.user?.id || isCloudSyncing) return;
 
     const userId = session.user.id;
     const accessToken = session.access_token;
     const hasLocalData = categoriesRef.current.some(c => c.images && c.images.length > 0);
 
-    setIsInitialSync(isInitial);
+    // Always set syncing state for header icon, but only show full-screen UI if not silent
     setIsCloudSyncing(true);
-    setCloudSyncProgress('Checking cloud for your data...');
+    
+    if (!silent) {
+      setIsInitialSync(isInitial);
+      setCloudSyncProgress('Checking cloud for your data...');
+    } else {
+      setIsInitialSync(false); // Prevent full-screen modal
+      console.log('🔄 Silent background sync starting...');
+    }
 
     try {
       const cloudData = await fetchFullCloudData(userId);
       if (!cloudData.ok) {
         console.warn('Cloud sync failed:', cloudData.error);
         setIsCloudSyncing(false);
-        setCloudSyncProgress('');
+        if (!silent) {
+          setCloudSyncProgress('');
+        }
         return;
       }
 
       if (cloudData.categories.length === 0) {
         console.log('No cloud data found for this user');
+        
+        // Still run cleanup even if no active categories exist
+        // This handles the case where all categories are soft-deleted
+        console.log('🧹 Running cleanup (no active categories)...');
+        const cleanupResult = await runCleanup(userId, accessToken, deleteFromR2);
+        console.log('🧹 Cleanup result:', cleanupResult);
+        
+        if (cleanupResult.ok) {
+          const { deletedImages, deletedCategories, freedBytes, errors } = cleanupResult;
+          if (deletedImages > 0 || deletedCategories > 0) {
+            console.log(
+              `Cleanup: ${deletedImages} images, ${deletedCategories} categories purged, ` +
+              `${(freedBytes / 1024 / 1024).toFixed(2)} MB freed`
+            );
+          } else {
+            console.log('Cleanup: nothing to purge');
+          }
+          if (errors && errors.length > 0) {
+            console.warn('Cleanup errors:', errors);
+          }
+        } else {
+          console.error('Cleanup failed:', cleanupResult.errors || cleanupResult.error);
+        }
+        
         setHasSyncedOnce(true);
         setIsCloudSyncing(false);
-        setCloudSyncProgress('');
+        if (!silent) {
+          setCloudSyncProgress('');
+        }
         return;
       }
 
@@ -197,36 +231,68 @@ export default function PhotographyPoseGuide() {
 
       if (!hasLocalData) {
         // ---- FRESH SYNC: No local data, pull everything from cloud ----
-        await fullCloudPull(supabaseCategories, imagesByCategoryUid, imageTagsLookup, accessToken);
+        await fullCloudPull(supabaseCategories, imagesByCategoryUid, imageTagsLookup, accessToken, silent);
       } else {
         // ---- INCREMENTAL MERGE: Merge cloud changes into existing local data ----
-        await mergeCloudIntoLocal(supabaseCategories, supabaseImages, imagesByCategoryUid, imageTagsLookup, accessToken, userId);
+        await mergeCloudIntoLocal(supabaseCategories, supabaseImages, imagesByCategoryUid, imageTagsLookup, accessToken, userId, silent);
       }
 
       // After pull/merge, retry any local images that failed to upload to R2/Supabase
-      setCloudSyncProgress('Checking for unsynced local images...');
+      if (!silent) {
+        setCloudSyncProgress('Checking for unsynced local images...');
+      }
       const retriedCount = await retryFailedUploads();
       if (retriedCount > 0) {
         console.log(`Retried ${retriedCount} failed/pending uploads during sync`);
       }
 
+      // Run cleanup to purge soft-deleted records after sync
+      if (!silent) {
+        setCloudSyncProgress('Cleaning up deleted items...');
+      }
+      console.log('🧹 Starting cleanup...');
+      const cleanupResult = await runCleanup(userId, accessToken, deleteFromR2);
+      console.log('🧹 Cleanup result:', cleanupResult);
+      
+      if (cleanupResult.ok) {
+        const { deletedImages, deletedCategories, freedBytes, errors } = cleanupResult;
+        if (deletedImages > 0 || deletedCategories > 0) {
+          console.log(
+            `Sync cleanup: ${deletedImages} images, ${deletedCategories} categories purged, ` +
+            `${(freedBytes / 1024 / 1024).toFixed(2)} MB freed`
+          );
+        } else {
+          console.log('Cleanup: nothing to purge');
+        }
+        if (errors && errors.length > 0) {
+          console.warn('Cleanup errors:', errors);
+        }
+      } else {
+        console.error('Cleanup failed:', cleanupResult.errors || cleanupResult.error);
+      }
+
       setHasSyncedOnce(true);
-      setCloudSyncProgress('');
       setIsCloudSyncing(false);
+      if (!silent) {
+        setCloudSyncProgress('');
+      }
+      console.log('✅ Sync complete');
     } catch (err) {
       console.error('Cloud sync error:', err);
-      setCloudSyncProgress('');
       setIsCloudSyncing(false);
+      if (!silent) {
+        setCloudSyncProgress('');
+      }
     }
   };
 
-  // Auto-sync on load
+  // Auto-sync on load (silent background sync)
   useEffect(() => {
     if (!session?.user?.id || categoriesLoading || isCloudSyncing) return;
     if (cloudSyncAttemptedRef.current) return;
     cloudSyncAttemptedRef.current = true;
 
-    syncFromCloud();
+    syncFromCloud({ silent: true });
   }, [session?.user?.id, categoriesLoading]);
 
   // Fetch multiple images from R2 in parallel batches
@@ -261,8 +327,10 @@ export default function PhotographyPoseGuide() {
   };
 
   // Full cloud pull — used when local storage is empty (first sync / new device)
-  const fullCloudPull = async (supabaseCategories, imagesByCategoryUid, imageTagsLookup, accessToken) => {
-    setCloudSyncProgress(`Found ${supabaseCategories.length} categories, loading images...`);
+  const fullCloudPull = async (supabaseCategories, imagesByCategoryUid, imageTagsLookup, accessToken, silent = false) => {
+    if (!silent) {
+      setCloudSyncProgress(`Found ${supabaseCategories.length} categories, loading images...`);
+    }
 
     const localCategories = [];
     let totalImages = 0;
@@ -276,14 +344,16 @@ export default function PhotographyPoseGuide() {
       const cat = supabaseCategories[catIdx];
       const catImages = imagesByCategoryUid[cat.uid] || [];
 
-      setCloudSyncProgress(
-        `Loading "${cat.name}" (${catIdx + 1}/${supabaseCategories.length})...`
-      );
+      if (!silent) {
+        setCloudSyncProgress(
+          `Loading "${cat.name}" (${catIdx + 1}/${supabaseCategories.length})...`
+        );
+      }
 
       // Fetch all images for this category in parallel
       const imageSrcs = await fetchImagesFromR2Parallel(catImages, accessToken, (done, total) => {
         const currentLoaded = loadedImages + done;
-        if (done % 3 === 0 || done === total) {
+        if (!silent && (done % 3 === 0 || done === total)) {
           setCloudSyncProgress(`Loading images... ${currentLoaded}/${totalImages}`);
         }
       });
@@ -325,13 +395,15 @@ export default function PhotographyPoseGuide() {
       });
     }
 
-    setCloudSyncProgress('Saving to local storage...');
+    if (!silent) {
+      setCloudSyncProgress('Saving to local storage...');
+    }
     replaceAllCategories(localCategories);
     console.log(`Cloud sync complete: ${localCategories.length} categories, ${loadedImages} images`);
   };
 
   // Incremental merge — used when local data exists (page refresh / returning to app)
-  const mergeCloudIntoLocal = async (supabaseCategories, supabaseImages, imagesByCategoryUid, imageTagsLookup, accessToken, userId) => {
+  const mergeCloudIntoLocal = async (supabaseCategories, supabaseImages, imagesByCategoryUid, imageTagsLookup, accessToken, userId, silent = false) => {
     const local = categoriesRef.current;
 
     // Build lookup of local categories by supabaseUid
@@ -354,7 +426,9 @@ export default function PhotographyPoseGuide() {
     for (const cloudCat of supabaseCategories) {
       if (localByUid[cloudCat.uid]) continue; // Already exists locally
 
-      setCloudSyncProgress(`Syncing new category "${cloudCat.name}"...`);
+      if (!silent) {
+        setCloudSyncProgress(`Syncing new category "${cloudCat.name}"...`);
+      }
 
       const catImages = imagesByCategoryUid[cloudCat.uid] || [];
 
@@ -426,7 +500,9 @@ export default function PhotographyPoseGuide() {
 
       const newCloudImages = cloudImages.filter(ci => !localImageUids.has(ci.uid));
       if (newCloudImages.length > 0) {
-        setCloudSyncProgress(`Syncing ${newCloudImages.length} new images to "${localCat.name}"...`);
+        if (!silent) {
+          setCloudSyncProgress(`Syncing ${newCloudImages.length} new images to "${localCat.name}"...`);
+        }
 
         // Fetch new images in parallel
         const imageSrcs = await fetchImagesFromR2Parallel(newCloudImages, accessToken);
@@ -589,41 +665,23 @@ export default function PhotographyPoseGuide() {
     hydrateAll();
   }, [session?.user?.id, categoriesLoading, categories.length]);
 
-  // ==========================================
-  // BATCH CLEANUP: Purge soft-deleted records and R2 files
-  // ==========================================
-  useEffect(() => {
-    if (!session?.user?.id || !session?.access_token || categoriesLoading) return;
-    if (cleanupAttemptedRef.current) return;
-    cleanupAttemptedRef.current = true;
-
-    const doCleanup = async () => {
-      console.log('Running batch cleanup...');
-      const result = await runCleanup(session.user.id, session.access_token, deleteFromR2);
-      if (result.ok) {
-        const { deletedImages, deletedCategories, freedBytes, errors } = result;
-        if (deletedImages > 0 || deletedCategories > 0) {
-          console.log(
-            `Cleanup finished: ${deletedImages} images, ${deletedCategories} categories purged, ` +
-            `${(freedBytes / 1024 / 1024).toFixed(2)} MB freed`
-          );
-        } else {
-          console.log('Cleanup: nothing to purge');
-        }
-        if (errors.length > 0) {
-          console.warn('Cleanup encountered errors:', errors);
-        }
-      } else {
-        console.error('Cleanup failed:', result.errors);
-      }
-    };
-
-    // Run cleanup in background after a short delay to not compete with initial load
-    const timer = setTimeout(doCleanup, 3000);
-    return () => clearTimeout(timer);
-  }, [session?.user?.id, session?.access_token, categoriesLoading]);
-
   // Handlers
+
+  // Helper function to create timestamped filename for R2
+  // Format: DDMMYYYYHHMMSS-originalname.ext
+  // Example: 29012026235036-image_18.webp
+  const createTimestampedFilename = (originalFilename) => {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const timestamp = `${day}${month}${year}${hours}${minutes}${seconds}`;
+    
+    return `${timestamp}-${originalFilename}`;
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -716,10 +774,37 @@ export default function PhotographyPoseGuide() {
     const cat = categoriesRef.current.find(c => c.id === categoryId);
     if (!cat) return;
 
-    const filename = (originalFilename || 'cover').replace(/\.[^/.]+$/, '') + '_cover.webp';
+    // Delete old cover photo from R2 and Supabase if it exists
+    if (cat.coverR2Key) {
+      deleteFromR2(cat.coverR2Key, session?.access_token)
+        .then(result => {
+          if (result.ok) {
+            console.log(`Old cover photo deleted from R2: ${cat.coverR2Key}`);
+          } else {
+            console.error('Old cover photo R2 deletion failed:', result.error);
+          }
+        })
+        .catch(err => console.error('Old cover photo R2 deletion error:', err));
+    }
+
+    // Soft-delete old cover image record in Supabase if it exists
+    if (cat.coverImageUid) {
+      deleteImageInSupabase(cat.coverImageUid, userId)
+        .then(result => {
+          if (result.ok) {
+            console.log(`Old cover image record soft-deleted: ${cat.coverImageUid}`);
+          } else {
+            console.error('Old cover image Supabase deletion failed:', result.error);
+          }
+        })
+        .catch(err => console.error('Old cover image Supabase deletion error:', err));
+    }
+
+    const baseFilename = (originalFilename || 'cover').replace(/\.[^/.]+$/, '') + '_cover.webp';
+    const filename = createTimestampedFilename(baseFilename);
 
     try {
-      // Upload to R2
+      // Upload new cover to R2
       const r2Result = await uploadToR2(dataURL, filename, session.access_token);
       if (!r2Result.ok) {
         console.error('Cover R2 upload failed:', r2Result.error);
@@ -809,7 +894,8 @@ export default function PhotographyPoseGuide() {
             r2Key: null, // Will be updated after R2 upload
             r2Status: 'pending' // pending, uploading, uploaded, failed
           });
-          filenames.push(files[i].name.replace(/\.[^/.]+$/, '.webp'));
+          const baseFilename = files[i].name.replace(/\.[^/.]+$/, '.webp');
+          filenames.push(createTimestampedFilename(baseFilename));
         } catch (error) {
           console.error(`Error optimizing image ${i + 1}:`, error);
 
@@ -829,7 +915,7 @@ export default function PhotographyPoseGuide() {
             r2Key: null,
             r2Status: 'pending'
           });
-          filenames.push(files[i].name);
+          filenames.push(createTimestampedFilename(files[i].name));
         }
       }
 
@@ -1027,7 +1113,8 @@ export default function PhotographyPoseGuide() {
         updateImage(cat.id, imgIdx, { r2Status: 'uploading' });
 
         try {
-          const filename = img.poseName || `image-${imgIdx}`;
+          const baseFilename = img.poseName || `image-${imgIdx}`;
+          const filename = baseFilename.match(/^\d{14}-/) ? baseFilename : createTimestampedFilename(baseFilename);
           const result = await uploadSingleToR2WithRetry(img.src, filename, accessToken);
 
           if (result.ok) {
@@ -1167,7 +1254,20 @@ export default function PhotographyPoseGuide() {
       const image = cat.images[imageIndex];
       const userId = session?.user?.id;
 
-      // Sync deletion to Supabase if image has a Supabase UID
+      // Delete from R2 immediately if r2Key exists
+      if (image.r2Key && session?.access_token) {
+        deleteFromR2(image.r2Key, session.access_token)
+          .then(result => {
+            if (result.ok) {
+              console.log(`Image deleted from R2: ${image.r2Key}`);
+            } else {
+              console.error('Image R2 deletion failed:', result.error);
+            }
+          })
+          .catch(err => console.error('Image R2 deletion error:', err));
+      }
+
+      // Soft-delete in Supabase if image has a Supabase UID
       if (image.supabaseUid && userId) {
         deleteImageInSupabase(image.supabaseUid, userId)
           .catch(err => console.error('Supabase delete sync error:', err));
@@ -1294,8 +1394,41 @@ export default function PhotographyPoseGuide() {
     const userId = session?.user?.id;
 
     if (cat && userId) {
-      // Soft-delete all images in this category
+      // Delete cover photo from R2 if it exists
+      if (cat.coverR2Key) {
+        deleteFromR2(cat.coverR2Key, session?.access_token)
+          .then(result => {
+            if (result.ok) {
+              console.log(`Cover photo deleted from R2: ${cat.coverR2Key}`);
+            } else {
+              console.error('Cover photo R2 deletion failed:', result.error);
+            }
+          })
+          .catch(err => console.error('Cover photo R2 deletion error:', err));
+      }
+
+      // Soft-delete cover image record in Supabase if it exists
+      if (cat.coverImageUid) {
+        deleteImageInSupabase(cat.coverImageUid, userId)
+          .catch(err => console.error('Supabase cover image delete error:', err));
+      }
+
+      // Delete all gallery images from R2 AND soft-delete in Supabase
       for (const image of (cat.images || [])) {
+        // Delete from R2 immediately if r2Key exists
+        if (image.r2Key) {
+          deleteFromR2(image.r2Key, session?.access_token)
+            .then(result => {
+              if (result.ok) {
+                console.log(`Gallery image deleted from R2: ${image.r2Key}`);
+              } else {
+                console.error('Gallery image R2 deletion failed:', result.error);
+              }
+            })
+            .catch(err => console.error('Gallery image R2 deletion error:', err));
+        }
+
+        // Soft-delete in Supabase
         let imageUid = image.supabaseUid;
         if (!imageUid && image.r2Key) {
           const lookup = await findImageByR2Key(image.r2Key, userId);
@@ -1316,6 +1449,10 @@ export default function PhotographyPoseGuide() {
 
     // Delete locally
     deleteCategory(categoryId);
+    
+    // Force save to IndexedDB to persist the deletion
+    await forceSave();
+    console.log(`Category ${categoryId} deleted and saved to IndexedDB`);
   };
 
   // Toggle category favorite with sync
@@ -1449,7 +1586,7 @@ export default function PhotographyPoseGuide() {
 
     const userId = session?.user?.id;
 
-    // Soft-delete each selected image in Supabase before removing locally
+    // Delete from R2 and soft-delete in Supabase before removing locally
     if (userId) {
       const cat = categoriesRef.current.find(c => c.id === currentCategory.id);
       if (cat) {
@@ -1457,6 +1594,20 @@ export default function PhotographyPoseGuide() {
           const image = cat.images[imageIndex];
           if (!image) continue;
 
+          // Delete from R2 immediately if r2Key exists
+          if (image.r2Key && session?.access_token) {
+            deleteFromR2(image.r2Key, session.access_token)
+              .then(result => {
+                if (result.ok) {
+                  console.log(`Bulk delete: Image deleted from R2: ${image.r2Key}`);
+                } else {
+                  console.error('Bulk delete: R2 deletion failed:', result.error);
+                }
+              })
+              .catch(err => console.error('Bulk delete: R2 deletion error:', err));
+          }
+
+          // Soft-delete in Supabase
           let imageUid = image.supabaseUid;
           if (!imageUid && image.r2Key) {
             const lookup = await findImageByR2Key(image.r2Key, userId);
@@ -1545,7 +1696,7 @@ export default function PhotographyPoseGuide() {
         onBack={handleBack}
         onAddCategory={() => setShowNewCategoryModal(true)}
         onUploadPoses={handleImagesUpload}
-        onSync={() => syncFromCloud({ isInitial: false })}
+        onSync={() => syncFromCloud({ isInitial: false, silent: true })}
         onLogout={handleLogout}
         isUploading={showUploadProgress}
         isSaving={isSaving}
@@ -1631,7 +1782,7 @@ export default function PhotographyPoseGuide() {
           totalImages={category.images.length}
           categoryName={category.name}
           category={category}
-          onClose={() => setViewMode('grid')}
+          onClose={() => window.history.back()}
           onToggleFavorite={() => handleToggleFavorite(category.id, currentImageIndex)}
           onPrevious={() => setCurrentImageIndex(currentImageIndex - 1)}
           onNext={() => setCurrentImageIndex(currentImageIndex + 1)}
