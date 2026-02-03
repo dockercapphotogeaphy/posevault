@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Heart, Camera, Images, Settings } from 'lucide-react';
+import { Heart, Camera, Images, Settings, Check } from 'lucide-react';
 import CategorySettingsDropdown from './Modals/CategorySettingsDropdown';
 
 export default function CategoryCard({
@@ -11,7 +11,11 @@ export default function CategoryCard({
   onEditSettings,
   onUploadCover,
   onDelete,
-  onGeneratePDF
+  onGeneratePDF,
+  bulkSelectMode = false,
+  isSelected = false,
+  onSelect,
+  onStartBulkSelect
 }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [dropdownAlignRight, setDropdownAlignRight] = useState(false);
@@ -19,6 +23,8 @@ export default function CategoryCard({
   const dropdownRef = useRef(null);
   const settingsButtonRef = useRef(null);
   const fileInputRef = useRef(null);
+  const longPressTimerRef = useRef(null);
+  const longPressTriggeredRef = useRef(false);
 
   // Filter out cover images from gallery counts
   const galleryImages = category.images.filter(img => !img.isCover);
@@ -40,6 +46,60 @@ export default function CategoryCard({
       fileInputRef.current?.click();
     }
   };
+
+  // Long press handlers for bulk select
+  const handlePointerDown = (e) => {
+    if (bulkSelectMode) return;
+    longPressTriggeredRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      if (onStartBulkSelect) {
+        onStartBulkSelect(category.id);
+      }
+    }, 500);
+  };
+
+  const handlePointerUp = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handlePointerLeave = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  // Handle card click
+  const handleCardClick = (e) => {
+    // Prevent click if long press was triggered
+    if (longPressTriggeredRef.current) {
+      longPressTriggeredRef.current = false;
+      return;
+    }
+
+    if (bulkSelectMode) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (onSelect) {
+        onSelect(category.id);
+      }
+    } else if (hasGalleryImages) {
+      onOpen(category);
+    }
+  };
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+      }
+    };
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -75,40 +135,67 @@ export default function CategoryCard({
   };
 
   return (
-    <div className="tutorial-gallery-card bg-gray-800 rounded-xl shadow-lg hover:shadow-2xl transition-shadow relative">
+    <div
+      className={`tutorial-gallery-card bg-gray-800 rounded-xl shadow-lg hover:shadow-2xl transition-shadow relative ${
+        isSelected ? 'ring-2 ring-green-500' : ''
+      }`}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerLeave}
+      onPointerCancel={handlePointerLeave}
+    >
+      {/* Bulk Select Checkbox */}
+      {bulkSelectMode && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onSelect) onSelect(category.id);
+          }}
+          className={`absolute top-2 left-2 w-6 h-6 rounded-full z-20 flex items-center justify-center transition-colors cursor-pointer ${
+            isSelected
+              ? 'bg-green-500 text-white'
+              : 'bg-gray-800 bg-opacity-75 text-gray-400'
+          }`}
+        >
+          {isSelected && <Check size={16} />}
+        </button>
+      )}
+
       {category.cover ? (
         <>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleFavorite(category.id);
-            }}
-            className="absolute top-2 right-2 p-2 rounded-full bg-gray-800 bg-opacity-75 hover:bg-opacity-100 transition-all z-10 cursor-pointer"
-          >
-            <Heart
-              size={20}
-              className={category.isFavorite ? 'fill-red-500 text-red-500' : 'text-white'}
-            />
-          </button>
+          {!bulkSelectMode && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite(category.id);
+              }}
+              className="absolute top-2 right-2 p-2 rounded-full bg-gray-800 bg-opacity-75 hover:bg-opacity-100 transition-all z-10 cursor-pointer"
+            >
+              <Heart
+                size={20}
+                className={category.isFavorite ? 'fill-red-500 text-red-500' : 'text-white'}
+              />
+            </button>
+          )}
 
           <div
-            onClick={() => hasGalleryImages && onOpen(category)}
-            className={`aspect-[4/3] bg-gray-700 relative group ${hasGalleryImages ? 'cursor-pointer' : ''}`}
+            onClick={handleCardClick}
+            className={`aspect-[4/3] bg-gray-700 relative group ${hasGalleryImages || bulkSelectMode ? 'cursor-pointer' : ''}`}
           >
             <img
               src={category.cover}
               alt={category.name}
               className="w-full h-full object-cover rounded-t-xl"
             />
-            {hasGalleryImages && (
+            {(hasGalleryImages || bulkSelectMode) && (
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all" />
             )}
           </div>
         </>
       ) : (
         <div
-          onClick={() => hasGalleryImages && onOpen(category)}
-          className={`bg-gray-700 py-6 md:py-8 flex items-center justify-center gap-2 md:gap-3 aspect-[4/3] rounded-t-xl ${hasGalleryImages ? 'cursor-pointer hover:bg-gray-600' : ''} transition-colors`}
+          onClick={handleCardClick}
+          className={`bg-gray-700 py-6 md:py-8 flex items-center justify-center gap-2 md:gap-3 aspect-[4/3] rounded-t-xl ${hasGalleryImages || bulkSelectMode ? 'cursor-pointer hover:bg-gray-600' : ''} transition-colors`}
         >
           <Camera size={20} className="text-gray-400 md:w-6 md:h-6" />
           <span className="text-gray-400 font-medium text-sm md:text-base">No Cover Photo</span>
@@ -120,7 +207,7 @@ export default function CategoryCard({
           <h3 className="font-bold text-sm md:text-lg truncate pr-2">
             {category.name}
           </h3>
-          {!category.cover && (
+          {!category.cover && !bulkSelectMode && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -138,58 +225,60 @@ export default function CategoryCard({
         <p className="text-xs md:text-sm text-gray-400 mb-3">
           {galleryImages.length} poses • {galleryImages.filter(img => img.isFavorite).length} favorites
         </p>
-        
-        <div className="flex gap-2">
-          {/* Add Images Button */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept="image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,.png,.jpg,.jpeg,.webp,.gif,.heic,.heif"
-            onChange={(e) => onUploadImages(e, category.id)}
-            className="hidden"
-          />
-          <button
-            onClick={handleUploadClick}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
-          >
-            <Images size={16} />
-            <span className="hidden sm:inline">Add Images</span>
-            <span className="sm:hidden">Add</span>
-          </button>
 
-          {/* Settings Button - now inline */}
-          <div className="relative" ref={dropdownRef}>
+        {!bulkSelectMode && (
+          <div className="flex gap-2">
+            {/* Add Images Button */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,.png,.jpg,.jpeg,.webp,.gif,.heic,.heif"
+              onChange={(e) => onUploadImages(e, category.id)}
+              className="hidden"
+            />
             <button
-              ref={settingsButtonRef}
-              onClick={handleSettingsClick}
-              className="tutorial-settings-button h-full px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors cursor-pointer flex items-center"
-              aria-label="Gallery settings"
+              onClick={handleUploadClick}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
             >
-              <Settings size={16} className="text-gray-300" />
+              <Images size={16} />
+              <span className="hidden sm:inline">Add Images</span>
+              <span className="sm:hidden">Add</span>
             </button>
 
-            {/* Dropdown menu */}
-            {showDropdown && (
-              <div className={`absolute ${
-                dropdownAlignTop ? 'bottom-full mb-2' : 'mt-2'
-              } ${
-                dropdownAlignRight ? 'right-0' : 'left-0'
-              } min-w-[180px] z-20`}>
-                <CategorySettingsDropdown
-                  category={category}
-                  onEditSettings={(catId) => {
-                    onEditSettings(catId);
-                  }}
-                  onGeneratePDF={() => {
-                    onGeneratePDF(category);
-                  }}
-                  onClose={() => setShowDropdown(false)}
-                />
-              </div>
-            )}
+            {/* Settings Button - now inline */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                ref={settingsButtonRef}
+                onClick={handleSettingsClick}
+                className="tutorial-settings-button h-full px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors cursor-pointer flex items-center"
+                aria-label="Gallery settings"
+              >
+                <Settings size={16} className="text-gray-300" />
+              </button>
+
+              {/* Dropdown menu */}
+              {showDropdown && (
+                <div className={`absolute ${
+                  dropdownAlignTop ? 'bottom-full mb-2' : 'mt-2'
+                } ${
+                  dropdownAlignRight ? 'right-0' : 'left-0'
+                } min-w-[180px] z-20`}>
+                  <CategorySettingsDropdown
+                    category={category}
+                    onEditSettings={(catId) => {
+                      onEditSettings(catId);
+                    }}
+                    onGeneratePDF={() => {
+                      onGeneratePDF(category);
+                    }}
+                    onClose={() => setShowDropdown(false)}
+                  />
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

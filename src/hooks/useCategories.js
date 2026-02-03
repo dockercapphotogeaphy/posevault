@@ -53,6 +53,7 @@ export const useCategories = (currentUser) => {
         const migratedCategories = savedCategories.map(cat => ({
           ...cat,
           notes: cat.notes || '',
+          tags: cat.tags || [],
           images: cat.images.map(img => ({
             ...img,
             dateAdded: img.dateAdded || new Date().toISOString(),
@@ -115,6 +116,7 @@ export const useCategories = (currentUser) => {
         images: [],
         isFavorite: false,
         notes: privateSettings.notes || '',
+        tags: privateSettings.tags || [],
         isPrivate: privateSettings.isPrivate || false,
         privatePassword: privateSettings.privatePassword || null,
       }];
@@ -206,6 +208,43 @@ export const useCategories = (currentUser) => {
     ));
   };
 
+  // Bulk update multiple categories
+  const bulkUpdateCategories = (categoryIds, updates) => {
+    setCategories(prev => prev.map(cat => {
+      if (categoryIds.includes(cat.id)) {
+        let updatedCat = { ...cat };
+
+        // Handle tags - merge new tags with existing
+        if (updates.tags && updates.tags.length > 0) {
+          const existingTags = cat.tags || [];
+          updatedCat.tags = [...new Set([...existingTags, ...updates.tags])];
+        }
+
+        // Handle notes
+        if (updates.notes !== undefined) {
+          if (updates.notesMode === 'append') {
+            updatedCat.notes = cat.notes ? `${cat.notes}\n${updates.notes}` : updates.notes;
+          } else if (updates.notesMode === 'replace') {
+            updatedCat.notes = updates.notes;
+          }
+        }
+
+        // Handle favorites
+        if (updates.isFavorite !== undefined) {
+          updatedCat.isFavorite = updates.isFavorite;
+        }
+
+        return updatedCat;
+      }
+      return cat;
+    }));
+  };
+
+  // Bulk delete multiple categories
+  const bulkDeleteCategories = (categoryIds) => {
+    setCategories(prev => prev.filter(cat => !categoryIds.includes(cat.id)));
+  };
+
   // Replace all categories (used by cloud sync to populate local state)
   const replaceAllCategories = (newCategories) => {
     setCategories(newCategories);
@@ -237,6 +276,8 @@ export const useCategories = (currentUser) => {
     deleteImage,
     bulkUpdateImages,
     bulkDeleteImages,
+    bulkUpdateCategories,
+    bulkDeleteCategories,
     replaceAllCategories,
     forceSave
   };

@@ -14,6 +14,8 @@ import DeleteConfirmModal from './components/Modals/DeleteConfirmModal';
 import ImageEditModal from './components/Modals/ImageEditModal';
 import FilterModal from './components/Modals/FilterModal';
 import BulkEditModal from './components/Modals/BulkEditModal';
+import GalleryFilterModal from './components/Modals/GalleryFilterModal';
+import GalleryBulkEditModal from './components/Modals/GalleryBulkEditModal';
 import UploadProgressModal from './components/Modals/UploadProgressModal';
 import PrivateGalleryWarning from './components/Modals/PrivateGalleryWarning';
 import PDFOptionsModal from './components/Modals/PDFOptionsModal';
@@ -26,6 +28,7 @@ import { useCategories } from './hooks/useCategories';
 import {
   getAllTags,
   getCategoryTags,
+  getGalleryTags,
   getDisplayedCategories,
   getDisplayedImages
 } from './utils/helpers';
@@ -71,6 +74,8 @@ export default function PhotographyPoseGuide() {
     deleteImage,
     bulkUpdateImages,
     bulkDeleteImages,
+    bulkUpdateCategories,
+    bulkDeleteCategories,
     replaceAllCategories,
     forceSave
   } = useCategories(currentUser);
@@ -136,9 +141,19 @@ export default function PhotographyPoseGuide() {
   const [tagFilterMode, setTagFilterMode] = useState('include');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Bulk selection
+  // Bulk selection (images)
   const [bulkSelectMode, setBulkSelectMode] = useState(false);
   const [selectedImages, setSelectedImages] = useState([]);
+
+  // Gallery filtering and bulk selection
+  const [gallerySearchTerm, setGallerySearchTerm] = useState('');
+  const [selectedGalleryTagFilters, setSelectedGalleryTagFilters] = useState([]);
+  const [galleryTagFilterMode, setGalleryTagFilterMode] = useState('include');
+  const [gallerySortBy, setGallerySortBy] = useState('favorites');
+  const [showGalleryFilterModal, setShowGalleryFilterModal] = useState(false);
+  const [galleryBulkSelectMode, setGalleryBulkSelectMode] = useState(false);
+  const [selectedGalleries, setSelectedGalleries] = useState([]);
+  const [showGalleryBulkEditModal, setShowGalleryBulkEditModal] = useState(false);
 
   // Cloud sync state
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
@@ -1754,11 +1769,164 @@ export default function PhotographyPoseGuide() {
     setShowBulkEditModal(false);
   };
 
+  // Gallery filtering handlers
+  const handleGallerySetSortBy = (value) => {
+    if (value === 'favoritesOnly') {
+      setGallerySortBy('favorites');
+      setShowFavoriteCategoriesOnly(true);
+    } else {
+      setGallerySortBy(value);
+      setShowFavoriteCategoriesOnly(false);
+    }
+  };
+
+  const handleGalleryToggleTag = (tag) => {
+    if (selectedGalleryTagFilters.includes(tag)) {
+      setSelectedGalleryTagFilters(selectedGalleryTagFilters.filter(t => t !== tag));
+    } else {
+      setSelectedGalleryTagFilters([...selectedGalleryTagFilters, tag]);
+    }
+  };
+
+  const handleGallerySelect = (categoryId) => {
+    if (selectedGalleries.includes(categoryId)) {
+      setSelectedGalleries(selectedGalleries.filter(id => id !== categoryId));
+    } else {
+      setSelectedGalleries([...selectedGalleries, categoryId]);
+    }
+  };
+
+  // Gallery bulk edit handler
+  const handleGalleryBulkEdit = async (updates) => {
+    const bulkUpdates = {};
+
+    if (updates.tags && updates.tags.length > 0) {
+      bulkUpdates.tags = updates.tags;
+    }
+
+    if (updates.notes && updates.notes.trim()) {
+      bulkUpdates.notes = updates.notes;
+      bulkUpdates.notesMode = updates.notesMode;
+    }
+
+    if (updates.favoriteAction === 'favorite') {
+      bulkUpdates.isFavorite = true;
+    } else if (updates.favoriteAction === 'unfavorite') {
+      bulkUpdates.isFavorite = false;
+    }
+
+    // Update locally first
+    bulkUpdateCategories(selectedGalleries, bulkUpdates);
+
+    // Sync to Supabase in background
+    const userId = session?.user?.id;
+    if (userId) {
+      for (const categoryId of selectedGalleries) {
+        const cat = categoriesRef.current.find(c => c.id === categoryId);
+        if (!cat || !cat.supabaseUid) continue;
+
+        // Sync metadata updates (notes, favorites)
+        const metaUpdates = {};
+        if (bulkUpdates.notes !== undefined) {
+          if (bulkUpdates.notesMode === 'append' && cat.notes) {
+            metaUpdates.notes = `${cat.notes}\n${bulkUpdates.notes}`;
+          } else {
+            metaUpdates.notes = bulkUpdates.notes;
+          }
+        }
+        if (bulkUpdates.isFavorite !== undefined) {
+          metaUpdates.isFavorite = bulkUpdates.isFavorite;
+        }
+
+        if (Object.keys(metaUpdates).length > 0) {
+          updateCategoryInSupabase(cat.supabaseUid, metaUpdates, userId)
+            .catch(err => console.error('Gallery bulk edit Supabase sync error:', err));
+        }
+
+        // Sync tags: merge new tags with existing category tags
+        if (bulkUpdates.tags && bulkUpdates.tags.length > 0) {
+          const existingTags = cat.tags || [];
+          const mergedTags = [...new Set([...existingTags, ...bulkUpdates.tags])];
+          syncCategoryTags(cat.supabaseUid, mergedTags, userId)
+            .catch(err => console.error('Gallery bulk edit tag sync error:', err));
+        }
+      }
+    }
+
+    setGalleryBulkSelectMode(false);
+    setSelectedGalleries([]);
+  };
+
+  // Gallery bulk delete handler
+  const handleGalleryBulkDelete = async () => {
+    const userId = session?.user?.id;
+
+    // Delete from R2 and soft-delete in Supabase for each gallery
+    if (userId) {
+      for (const categoryId of selectedGalleries) {
+        const cat = categoriesRef.current.find(c => c.id === categoryId);
+        if (!cat) continue;
+
+        // Delete cover photo from R2 if it exists
+        if (cat.coverR2Key && session?.access_token) {
+          deleteFromR2(cat.coverR2Key, session.access_token)
+            .catch(err => console.error('Gallery bulk delete cover R2 error:', err));
+        }
+
+        // Soft-delete cover image record
+        if (cat.coverImageUid) {
+          deleteImageInSupabase(cat.coverImageUid, userId)
+            .catch(err => console.error('Gallery bulk delete cover Supabase error:', err));
+        }
+
+        // Delete all gallery images from R2 and soft-delete in Supabase
+        for (const image of (cat.images || [])) {
+          if (image.r2Key && session?.access_token) {
+            deleteFromR2(image.r2Key, session.access_token)
+              .catch(err => console.error('Gallery bulk delete image R2 error:', err));
+          }
+
+          let imageUid = image.supabaseUid;
+          if (!imageUid && image.r2Key) {
+            const lookup = await findImageByR2Key(image.r2Key, userId);
+            if (lookup.ok) imageUid = lookup.uid;
+          }
+          if (imageUid) {
+            deleteImageInSupabase(imageUid, userId)
+              .catch(err => console.error('Gallery bulk delete image Supabase error:', err));
+          }
+        }
+
+        // Soft-delete the category itself
+        if (cat.supabaseUid) {
+          deleteCategoryInSupabase(cat.supabaseUid, userId)
+            .catch(err => console.error('Gallery bulk delete Supabase error:', err));
+        }
+      }
+    }
+
+    // Delete locally
+    bulkDeleteCategories(selectedGalleries);
+
+    // Force save to persist deletion
+    await forceSave();
+
+    setGalleryBulkSelectMode(false);
+    setSelectedGalleries([]);
+    setShowGalleryBulkEditModal(false);
+  };
+
   // Get current category data
   const category = currentCategory ? categories.find(c => c.id === currentCategory.id) : null;
 
-  // Get displayed categories
-  const displayedCategories = getDisplayedCategories(categories, showFavoriteCategoriesOnly);
+  // Get displayed categories with filtering
+  const displayedCategories = getDisplayedCategories(categories, {
+    showFavoritesOnly: showFavoriteCategoriesOnly,
+    selectedTagFilters: selectedGalleryTagFilters,
+    tagFilterMode: galleryTagFilterMode,
+    sortBy: gallerySortBy,
+    searchTerm: gallerySearchTerm
+  });
 
   // Get displayed images
   const displayedImages = category ? getDisplayedImages(category, {
@@ -1772,6 +1940,7 @@ export default function PhotographyPoseGuide() {
   // Get all tags
   const allTags = getAllTags(categories);
   const categoryTags = category ? getCategoryTags(categories, category.id) : [];
+  const galleryTags = getGalleryTags(categories);
 
   // Loading screen
   if (authLoading || (isAuthenticated && categoriesLoading)) {
@@ -1854,6 +2023,25 @@ export default function PhotographyPoseGuide() {
             setShowDeleteConfirm(catId);
           }}
           onGeneratePDF={(category) => setPdfCategory(category)}
+          // Gallery filtering props
+          galleryTags={galleryTags}
+          selectedTagFilters={selectedGalleryTagFilters}
+          searchTerm={gallerySearchTerm}
+          onSearchChange={setGallerySearchTerm}
+          onShowGalleryFilter={() => setShowGalleryFilterModal(true)}
+          // Gallery bulk selection props
+          bulkSelectMode={galleryBulkSelectMode}
+          selectedGalleries={selectedGalleries}
+          onToggleBulkSelect={() => {
+            setGalleryBulkSelectMode(!galleryBulkSelectMode);
+            setSelectedGalleries([]);
+          }}
+          onSelectGallery={handleGallerySelect}
+          onStartBulkSelect={(categoryId) => {
+            setGalleryBulkSelectMode(true);
+            setSelectedGalleries([categoryId]);
+          }}
+          onShowBulkEdit={() => setShowGalleryBulkEditModal(true)}
         />
       )}
 
@@ -1933,6 +2121,7 @@ export default function PhotographyPoseGuide() {
         return (
           <CategorySettingsModal
             category={cat}
+            allTags={allTags}
             onClose={() => setEditingCategory(null)}
             onSave={handleSaveCategorySettings}
             onUploadCover={handleCoverUpload}
@@ -2005,6 +2194,38 @@ export default function PhotographyPoseGuide() {
           onClose={() => setShowBulkEditModal(false)}
           onApply={handleBulkEdit}
           onDelete={handleBulkDelete}
+        />
+      )}
+
+      {/* Gallery Filter Modal */}
+      {showGalleryFilterModal && (
+        <GalleryFilterModal
+          sortBy={gallerySortBy}
+          showFavoritesOnly={showFavoriteCategoriesOnly}
+          galleryTags={galleryTags}
+          selectedTagFilters={selectedGalleryTagFilters}
+          tagFilterMode={galleryTagFilterMode}
+          onSetSortBy={handleGallerySetSortBy}
+          onSetFilterMode={setGalleryTagFilterMode}
+          onToggleTag={handleGalleryToggleTag}
+          onClearFilters={() => {
+            setSelectedGalleryTagFilters([]);
+            setGallerySortBy('favorites');
+            setShowFavoriteCategoriesOnly(false);
+          }}
+          onClose={() => setShowGalleryFilterModal(false)}
+        />
+      )}
+
+      {/* Gallery Bulk Edit Modal */}
+      {showGalleryBulkEditModal && selectedGalleries.length > 0 && (
+        <GalleryBulkEditModal
+          selectedCount={selectedGalleries.length}
+          selectedGalleries={selectedGalleries.map(id => categories.find(c => c.id === id))}
+          allTags={allTags}
+          onClose={() => setShowGalleryBulkEditModal(false)}
+          onApply={handleGalleryBulkEdit}
+          onDelete={handleGalleryBulkDelete}
         />
       )}
 

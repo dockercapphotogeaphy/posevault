@@ -3,11 +3,16 @@
 export const getAllTags = (categories) => {
   const allTags = new Set();
   categories.forEach(cat => {
+    // Add image tags
     cat.images.forEach(img => {
       if (img.tags) {
         img.tags.forEach(tag => allTags.add(tag));
       }
     });
+    // Add gallery/category tags
+    if (cat.tags) {
+      cat.tags.forEach(tag => allTags.add(tag));
+    }
   });
   return Array.from(allTags).sort();
 };
@@ -24,16 +29,83 @@ export const getCategoryTags = (categories, categoryId) => {
   return Array.from(tags).sort();
 };
 
-export const getDisplayedCategories = (categories, showFavoriteCategoriesOnly) => {
-  // Sort: favorites first, then others
-  const sorted = [...categories].sort((a, b) => {
-    if (a.isFavorite && !b.isFavorite) return -1;
-    if (!a.isFavorite && b.isFavorite) return 1;
-    return 0;
+// Get all unique tags assigned directly to galleries (not image tags)
+export const getGalleryTags = (categories) => {
+  const tags = new Set();
+  categories.forEach(cat => {
+    if (cat.tags) {
+      cat.tags.forEach(tag => tags.add(tag));
+    }
   });
+  return Array.from(tags).sort();
+};
+
+export const getDisplayedCategories = (categories, filters) => {
+  // Support both old signature (boolean) and new signature (object)
+  const isOldSignature = typeof filters === 'boolean';
+  const showFavoriteCategoriesOnly = isOldSignature ? filters : filters?.showFavoritesOnly || false;
+  const selectedTagFilters = isOldSignature ? [] : filters?.selectedTagFilters || [];
+  const tagFilterMode = isOldSignature ? 'include' : filters?.tagFilterMode || 'include';
+  const sortBy = isOldSignature ? 'favorites' : filters?.sortBy || 'favorites';
+  const searchTerm = isOldSignature ? '' : filters?.searchTerm || '';
+
+  let filtered = [...categories];
+
+  // Filter by search term
+  if (searchTerm && searchTerm.trim()) {
+    const lowerSearchTerm = searchTerm.toLowerCase().trim();
+    filtered = filtered.filter(cat => {
+      // Search in gallery name
+      if (cat.name && cat.name.toLowerCase().includes(lowerSearchTerm)) {
+        return true;
+      }
+      // Search in gallery tags
+      if (cat.tags && cat.tags.some(tag => tag.toLowerCase().includes(lowerSearchTerm))) {
+        return true;
+      }
+      // Search in gallery notes
+      if (cat.notes && cat.notes.toLowerCase().includes(lowerSearchTerm)) {
+        return true;
+      }
+      return false;
+    });
+  }
+
+  // Filter by tags if any are selected
+  if (selectedTagFilters.length > 0) {
+    if (tagFilterMode === 'include') {
+      // Show only galleries that have ALL selected tags
+      filtered = filtered.filter(cat =>
+        cat.tags && selectedTagFilters.every(tag => cat.tags.includes(tag))
+      );
+    } else {
+      // Hide galleries that have ANY of the selected tags
+      filtered = filtered.filter(cat =>
+        !cat.tags || !selectedTagFilters.some(tag => cat.tags.includes(tag))
+      );
+    }
+  }
 
   // Filter if showing favorites only
-  return showFavoriteCategoriesOnly ? sorted.filter(cat => cat.isFavorite) : sorted;
+  if (showFavoriteCategoriesOnly) {
+    filtered = filtered.filter(cat => cat.isFavorite);
+  }
+
+  // Sort based on selected option
+  if (sortBy === 'favorites' || sortBy === 'dateAdded') {
+    // Sort: favorites first, then others (default behavior)
+    filtered.sort((a, b) => {
+      if (a.isFavorite && !b.isFavorite) return -1;
+      if (!a.isFavorite && b.isFavorite) return 1;
+      return 0;
+    });
+  } else if (sortBy === 'name') {
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sortBy === 'nameDesc') {
+    filtered.sort((a, b) => b.name.localeCompare(a.name));
+  }
+
+  return filtered;
 };
 
 export const getDisplayedImages = (category, filters) => {
