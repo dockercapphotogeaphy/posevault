@@ -87,6 +87,8 @@ export default function GalleryBulkEditModal({
                 }}
                 placeholder="Add a tag (press Enter)"
                 className="flex-1 bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                autoComplete="off"
+                data-form-type="other"
               />
               <button
                 onClick={() => {
@@ -194,6 +196,8 @@ export default function GalleryBulkEditModal({
             onChange={(e) => setBulkNotes(e.target.value)}
             placeholder={bulkNotesMode === 'append' ? 'Text to append to existing notes' : 'New notes to replace existing'}
             className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 min-h-[100px]"
+            autoComplete="off"
+            data-form-type="other"
           />
         </div>
 

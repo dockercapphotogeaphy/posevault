@@ -99,6 +99,8 @@ export default function NewCategoryModal({ onClose, onAdd }) {
             placeholder="e.g., Wedding Poses, Portraits"
             className="w-full bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
             autoFocus
+            autoComplete="off"
+            data-form-type="other"
           />
         </div>
 
@@ -162,6 +164,8 @@ export default function NewCategoryModal({ onClose, onAdd }) {
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Add notes about this gallery..."
             className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 min-h-[80px] resize-none"
+            autoComplete="off"
+            data-form-type="other"
           />
         </div>
 
@@ -212,6 +216,8 @@ export default function NewCategoryModal({ onClose, onAdd }) {
               }}
               placeholder="Enter password (leave blank for none)"
               className="w-full bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-600 mb-2"
+              autoComplete="new-password"
+              data-form-type="other"
             />
 
             {privatePassword && (
@@ -224,6 +230,8 @@ export default function NewCategoryModal({ onClose, onAdd }) {
                 }}
                 placeholder="Confirm password"
                 className="w-full bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-600"
+                autoComplete="new-password"
+                data-form-type="other"
               />
             )}
           </div>

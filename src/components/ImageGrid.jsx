@@ -102,6 +102,8 @@ export default function ImageGrid({
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search poses..."
             className="w-full bg-gray-700 text-white pl-10 pr-10 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+            autoComplete="off"
+            data-form-type="other"
           />
           {searchTerm && (
             <button

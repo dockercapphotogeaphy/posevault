@@ -188,6 +188,8 @@ export default function UserSettingsModal({
                   onChange={(e) => setDisplayName(e.target.value)}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Your name"
+                  autoComplete="off"
+                  data-form-type="other"
                 />
               </div>
 
@@ -201,6 +203,8 @@ export default function UserSettingsModal({
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="your@email.com"
+                  autoComplete="off"
+                  data-form-type="other"
                 />
                 <p className="text-xs text-gray-400 mt-1">
                   You'll receive a verification email if you change this
@@ -338,6 +342,8 @@ export default function UserSettingsModal({
                         onChange={(e) => setDeleteConfirmText(e.target.value)}
                         className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-red-500"
                         placeholder="Type DELETE"
+                        autoComplete="off"
+                        data-form-type="other"
                       />
                     </div>
 

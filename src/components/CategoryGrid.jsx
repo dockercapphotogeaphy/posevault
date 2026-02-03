@@ -48,6 +48,8 @@ export default function CategoryGrid({
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search galleries by name, tags, or notes..."
             className="w-full bg-gray-800 text-white pl-10 pr-10 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+            autoComplete="off"
+            data-form-type="other"
           />
           {searchTerm && (
             <button

@@ -110,6 +110,8 @@ export default function ImageEditModal({
             onChange={(e) => setLocalPoseName(e.target.value)}
             placeholder="Enter a name for this pose (e.g., Standing Profile, Action Shot)"
             className="w-full bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+            autoComplete="off"
+            data-form-type="other"
           />
         </div>
 
@@ -165,6 +167,8 @@ export default function ImageEditModal({
                 onKeyPress={(e) => e.key === 'Enter' && handleAddTag(tagInput)}
                 placeholder="Add a tag (press Enter)"
                 className="flex-1 bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                autoComplete="off"
+                data-form-type="other"
               />
               <button
                 onClick={() => handleAddTag(tagInput)}
@@ -222,6 +226,8 @@ export default function ImageEditModal({
             onChange={(e) => setLocalNotes(e.target.value)}
             placeholder="Add notes about this pose (e.g., lighting, location, client preferences)"
             className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 min-h-[100px]"
+            autoComplete="off"
+            data-form-type="other"
           />
         </div>
 

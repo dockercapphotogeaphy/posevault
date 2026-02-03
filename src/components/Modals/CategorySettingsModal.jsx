@@ -113,6 +113,8 @@ export default function CategorySettingsModal({ category, onClose, onSave, onUpl
               setError('');
             }}
             className="w-full bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+            autoComplete="off"
+            data-form-type="other"
           />
         </div>
 
@@ -193,6 +195,8 @@ export default function CategorySettingsModal({ category, onClose, onSave, onUpl
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Add notes about this gallery..."
             className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 min-h-[100px]"
+            autoComplete="off"
+            data-form-type="other"
           />
         </div>
 
@@ -220,6 +224,8 @@ export default function CategorySettingsModal({ category, onClose, onSave, onUpl
                 }}
                 placeholder="Add a tag (press Enter)"
                 className="flex-1 bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                autoComplete="off"
+                data-form-type="other"
               />
               <button
                 type="button"
@@ -361,6 +367,8 @@ export default function CategorySettingsModal({ category, onClose, onSave, onUpl
                     }}
                     placeholder="Current password"
                     className="w-full bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-600"
+                    autoComplete="new-password"
+                    data-form-type="other"
                   />
                 </div>
 
@@ -402,6 +410,8 @@ export default function CategorySettingsModal({ category, onClose, onSave, onUpl
                       }}
                       placeholder="Current password"
                       className="w-full bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-600"
+                      autoComplete="new-password"
+                      data-form-type="other"
                     />
                   </div>
                 )}
@@ -416,6 +426,8 @@ export default function CategorySettingsModal({ category, onClose, onSave, onUpl
                     }}
                     placeholder={hasExistingPassword ? "New password" : "Set password"}
                     className="w-full bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-600"
+                    autoComplete="new-password"
+                    data-form-type="other"
                   />
                 </div>
 
@@ -430,6 +442,8 @@ export default function CategorySettingsModal({ category, onClose, onSave, onUpl
                       }}
                       placeholder="Confirm password"
                       className="w-full bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-600"
+                      autoComplete="new-password"
+                      data-form-type="other"
                     />
                   </div>
                 )}

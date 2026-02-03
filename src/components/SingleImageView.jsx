@@ -123,6 +123,8 @@ export default function SingleImageView({
                   onBlur={handleSaveName}
                   className="bg-gray-700 text-white px-3 py-1 rounded text-lg font-semibold text-center focus:outline-none focus:ring-2 focus:ring-purple-600 max-w-md"
                   placeholder="Enter pose name..."
+                  autoComplete="off"
+                  data-form-type="other"
                 />
               </div>
             ) : (
