@@ -30,6 +30,7 @@ import {
   getDisplayedImages
 } from './utils/helpers';
 import { getUserSetting, setUserSetting } from './utils/userSettingsSync';
+import { getUserStorageInfo } from './utils/userStorage';
 import { convertToWebP, convertMultipleToWebP } from './utils/imageOptimizer';
 import { uploadToR2, fetchFromR2, getR2Url, deleteFromR2 } from './utils/r2Upload';
 import { hashPassword } from './utils/crypto';
@@ -38,6 +39,7 @@ import { useTutorial } from './hooks/useTutorial';
 import { useImageTutorial } from './hooks/useImageTutorial';
 import { tutorialSteps, tutorialStyles } from './utils/tutorialSteps.jsx';
 import { imageTutorialSteps } from './utils/imageTutorialSteps.jsx';
+import StorageLimitModal from './components/StorageLimitModal';
 import {
   createCategory as createCategoryInSupabase,
   updateCategory as updateCategoryInSupabase,
@@ -128,6 +130,10 @@ export default function PhotographyPoseGuide() {
   const [showUploadProgress, setShowUploadProgress] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [uploadComplete, setUploadComplete] = useState(false);
+  
+  // Storage limit modal
+  const [showStorageLimitModal, setShowStorageLimitModal] = useState(false);
+  const [storageLimitInfo, setStorageLimitInfo] = useState(null);
 
   // Image filtering and sorting
   const [sortBy, setSortBy] = useState('dateAdded');
@@ -1001,6 +1007,36 @@ export default function PhotographyPoseGuide() {
   const handleImagesUpload = async (e, categoryId) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
+
+    // Check storage before upload
+    if (session?.user?.id) {
+      // Calculate total size of files to upload
+      const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+      const totalMB = totalBytes / (1024 * 1024);
+      
+      // Get current storage info
+      const storageInfo = await getUserStorageInfo(session.user.id);
+      
+      if (storageInfo.ok) {
+        const availableMB = storageInfo.availableMB;
+        
+        // Check if upload would exceed storage limit
+        if (totalMB > availableMB) {
+          // Show storage limit modal
+          setStorageLimitInfo({
+            requiredMB: totalMB,
+            availableMB: availableMB,
+            usedDisplay: storageInfo.usedDisplay,
+            maxDisplay: storageInfo.maxDisplay
+          });
+          setShowStorageLimitModal(true);
+          
+          // Clear the file input
+          e.target.value = '';
+          return;
+        }
+      }
+    }
 
     // Reset and show upload progress modal
     setUploadProgress({ current: 0, total: files.length });
@@ -2082,6 +2118,20 @@ export default function PhotographyPoseGuide() {
           categoryId={showMobileUploadModal}
           onUpload={handleImagesUpload}
           onClose={() => setShowMobileUploadModal(null)}
+        />
+      )}
+
+      {/* Storage Limit Modal */}
+      {showStorageLimitModal && storageLimitInfo && (
+        <StorageLimitModal
+          requiredMB={storageLimitInfo.requiredMB}
+          availableMB={storageLimitInfo.availableMB}
+          usedDisplay={storageLimitInfo.usedDisplay}
+          maxDisplay={storageLimitInfo.maxDisplay}
+          onClose={() => {
+            setShowStorageLimitModal(false);
+            setStorageLimitInfo(null);
+          }}
         />
       )}
 
