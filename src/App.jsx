@@ -719,6 +719,20 @@ export default function PhotographyPoseGuide() {
       if (imgResult.ok && imgResult.value) {
         setGridColumns(parseInt(imgResult.value));
       }
+      
+      // Load filter preferences
+      const sortByResult = await getUserSetting(userId, 'filter_sort_by');
+      if (sortByResult?.ok && sortByResult.value) {
+        setSortBy(sortByResult.value);
+        if (sortByResult.value === 'favoritesOnly') {
+          setShowFavoritesOnly(true);
+        }
+      }
+      
+      const tagFilterModeResult = await getUserSetting(userId, 'filter_tag_mode');
+      if (tagFilterModeResult?.ok && tagFilterModeResult.value) {
+        setTagFilterMode(tagFilterModeResult.value);
+      }
     };
 
     loadGridPreferences();
@@ -1601,13 +1615,27 @@ export default function PhotographyPoseGuide() {
     setEditingCategory(null);
   };
 
-  const handleSetSortBy = (value) => {
+  const handleSetSortBy = async (value) => {
     if (value === 'favoritesOnly') {
       setSortBy('favorites');
       setShowFavoritesOnly(true);
     } else {
       setSortBy(value);
       setShowFavoritesOnly(false);
+    }
+    
+    // Save preference
+    if (session?.user?.id) {
+      await setUserSetting(session.user.id, 'filter_sort_by', value);
+    }
+  };
+
+  const handleSetFilterMode = async (mode) => {
+    setTagFilterMode(mode);
+    
+    // Save preference
+    if (session?.user?.id) {
+      await setUserSetting(session.user.id, 'filter_tag_mode', mode);
     }
   };
 
@@ -1821,6 +1849,7 @@ export default function PhotographyPoseGuide() {
         onBack={handleBack}
         onAddCategory={() => setShowNewCategoryModal(true)}
         onUploadPoses={handleImagesUpload}
+        onShowMobileUpload={(categoryId) => setShowMobileUploadModal(categoryId)}
         onSync={() => syncFromCloud({ isInitial: false, silent: true })}
         onLogout={handleLogout}
         onOpenSettings={() => setShowUserSettings(true)}
@@ -1902,20 +1931,34 @@ export default function PhotographyPoseGuide() {
         />
       )}
 
-      {viewMode === 'single' && category && category.images.length > 0 && (
-        <SingleImageView
-          image={category.images[currentImageIndex]}
-          currentIndex={currentImageIndex}
-          totalImages={category.images.length}
-          categoryName={category.name}
-          category={category}
-          onClose={() => window.history.back()}
-          onToggleFavorite={() => handleToggleFavorite(category.id, currentImageIndex)}
-          onPrevious={() => setCurrentImageIndex(currentImageIndex - 1)}
-          onNext={() => setCurrentImageIndex(currentImageIndex + 1)}
-          onUpdateImage={updateImageWithSync}
-        />
-      )}
+      {viewMode === 'single' && category && category.images.length > 0 && (() => {
+        // Create a category with sorted images for the viewer
+        const sortedCategory = { ...category, images: displayedImages };
+        return (
+          <SingleImageView
+            image={displayedImages[currentImageIndex]}
+            currentIndex={currentImageIndex}
+            totalImages={displayedImages.length}
+            categoryName={category.name}
+            category={sortedCategory}
+            onClose={() => window.history.back()}
+            onToggleFavorite={() => {
+              // Find original index of the current sorted image
+              const currentImage = displayedImages[currentImageIndex];
+              const originalIndex = category.images.indexOf(currentImage);
+              handleToggleFavorite(category.id, originalIndex);
+            }}
+            onPrevious={() => setCurrentImageIndex(currentImageIndex - 1)}
+            onNext={() => setCurrentImageIndex(currentImageIndex + 1)}
+            onUpdateImage={(catId, imgIndex, updates) => {
+              // Find original index for the update
+              const currentImage = displayedImages[imgIndex];
+              const originalIndex = category.images.indexOf(currentImage);
+              updateImageWithSync(catId, originalIndex, updates);
+            }}
+          />
+        );
+      })()}
 
       {/* Modals */}
       {showNewCategoryModal && (
@@ -1986,7 +2029,7 @@ export default function PhotographyPoseGuide() {
           selectedTagFilters={selectedTagFilters}
           tagFilterMode={tagFilterMode}
           onSetSortBy={handleSetSortBy}
-          onSetFilterMode={setTagFilterMode}
+          onSetFilterMode={handleSetFilterMode}
           onToggleTag={handleToggleTag}
           onClearFilters={() => {
             setSelectedTagFilters([]);
