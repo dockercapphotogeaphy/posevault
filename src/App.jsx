@@ -247,7 +247,11 @@ export default function PhotographyPoseGuide() {
         images: sampleGallery.images,
       });
 
-      // Create category in Supabase
+      // Wait for React state to update before continuing
+      // This ensures the gallery is visible before the tutorial starts
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // Create category in Supabase (don't block on this for the UI)
       const categoryData = {
         name: sampleGallery.name,
         notes: sampleGallery.notes,
