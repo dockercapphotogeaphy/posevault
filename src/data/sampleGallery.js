@@ -62,76 +62,27 @@ export const sampleGalleryData = {
 };
 
 /**
- * Convert an image path to a data URL by fetching it
- * @param {string} path - The path to the image (e.g., '/sample-gallery/pose-01.webp')
- * @returns {Promise<string>} - The data URL of the image
+ * Build a sample gallery using direct URLs (no data URL conversion needed)
+ * Images are served from /public/sample-gallery/ and don't need R2 upload
+ * @returns {Object} - The sample gallery ready to be added
  */
-export async function imagePathToDataUrl(path) {
-  try {
-    console.log(`[SampleGallery] Fetching image: ${path}`);
-    const response = await fetch(path);
-
-    if (!response.ok) {
-      console.error(`[SampleGallery] Failed to fetch ${path}: ${response.status} ${response.statusText}`);
-      return null;
-    }
-
-    const blob = await response.blob();
-    console.log(`[SampleGallery] Loaded ${path}: ${blob.size} bytes, type: ${blob.type}`);
-
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = (err) => {
-        console.error(`[SampleGallery] FileReader error for ${path}:`, err);
-        reject(err);
-      };
-      reader.readAsDataURL(blob);
-    });
-  } catch (error) {
-    console.error(`[SampleGallery] Failed to load sample image: ${path}`, error);
-    return null;
-  }
-}
-
-/**
- * Build a complete sample gallery with data URLs for all images
- * @returns {Promise<Object>} - The sample gallery ready to be added
- */
-export async function buildSampleGallery() {
-  console.log('[SampleGallery] Building sample gallery...');
+export function buildSampleGallery() {
+  console.log('[SampleGallery] Building sample gallery with direct URLs...');
   const { name, notes, tags, isPrivate, isFavorite, cover, images } = sampleGalleryData;
 
-  // Load cover image
-  console.log('[SampleGallery] Loading cover image...');
-  const coverDataUrl = await imagePathToDataUrl(cover.path);
-  console.log(`[SampleGallery] Cover loaded: ${coverDataUrl ? 'success' : 'failed'}`);
+  // Build images array with direct URLs
+  const galleryImages = images.map((img) => ({
+    src: img.path, // Use direct URL, not data URL
+    poseName: img.poseName,
+    notes: img.notes,
+    tags: img.tags,
+    isFavorite: img.isFavorite,
+    dateAdded: new Date().toISOString(),
+    // Mark as sample image so we skip R2 upload (already served from public folder)
+    isSampleImage: true,
+  }));
 
-  // Load all pose images in parallel
-  console.log(`[SampleGallery] Loading ${images.length} pose images...`);
-  const loadedImages = await Promise.all(
-    images.map(async (img) => {
-      const src = await imagePathToDataUrl(img.path);
-      return {
-        src,
-        poseName: img.poseName,
-        notes: img.notes,
-        tags: img.tags,
-        isFavorite: img.isFavorite,
-        dateAdded: new Date().toISOString(),
-        // Sample gallery is in-memory only - no cloud storage
-        isSampleImage: true,
-      };
-    })
-  );
-
-  // Filter out any images that failed to load
-  const validImages = loadedImages.filter((img) => img.src !== null);
-  console.log(`[SampleGallery] Successfully loaded ${validImages.length}/${images.length} images`);
-
-  if (validImages.length === 0) {
-    console.error('[SampleGallery] No images could be loaded! Check that files exist in public/sample-gallery/');
-  }
+  console.log(`[SampleGallery] Built gallery with ${galleryImages.length} images`);
 
   return {
     name,
@@ -139,10 +90,8 @@ export async function buildSampleGallery() {
     tags,
     isPrivate,
     isFavorite,
-    cover: coverDataUrl,
+    cover: cover.path, // Use direct URL for cover too
     coverTags: cover.tags,
-    images: validImages,
-    // Mark as sample gallery for special handling (in-memory only, no cloud sync)
-    isSampleGallery: true,
+    images: galleryImages,
   };
 }
