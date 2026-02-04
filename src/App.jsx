@@ -207,24 +207,30 @@ export default function PhotographyPoseGuide() {
   }, []);
 
   // ==========================================
-  // SAMPLE GALLERY: Seed for new users who haven't had it created yet
+  // SAMPLE GALLERY: In-memory only gallery for new users (not persisted to cloud)
   // ==========================================
-  const seedSampleGalleryIfNeeded = async (userId, accessToken, silent = false) => {
+  const seedSampleGalleryIfNeeded = async (userId, silent = false) => {
     try {
-      // Check if sample gallery has already been created for this user
-      const sampleGalleryResult = await getUserSetting(userId, 'sample_gallery_created');
-      console.log('[SampleGallery] Flag check result:', sampleGalleryResult);
-      const sampleGalleryCreated = sampleGalleryResult?.ok ? sampleGalleryResult.value : null;
-      console.log('[SampleGallery] sample_gallery_created value:', sampleGalleryCreated, 'type:', typeof sampleGalleryCreated);
+      // Check if user has dismissed the sample gallery
+      const dismissedResult = await getUserSetting(userId, 'sample_gallery_dismissed');
+      console.log('[SampleGallery] Dismissed flag check result:', dismissedResult);
+      const isDismissed = dismissedResult?.ok ? dismissedResult.value : null;
 
-      if (sampleGalleryCreated === 'true' || sampleGalleryCreated === true) {
-        console.log('[SampleGallery] Sample gallery already created, skipping');
+      if (isDismissed === 'true' || isDismissed === true) {
+        console.log('[SampleGallery] Sample gallery was dismissed, skipping');
         return;
       }
 
-      console.log('🎨 Creating sample gallery for new user...');
+      // Check if sample gallery already exists in current state (e.g., from previous load in same session)
+      const existingSample = categoriesRef.current.find(c => c.isSampleGallery);
+      if (existingSample) {
+        console.log('[SampleGallery] Sample gallery already in state, skipping');
+        return;
+      }
+
+      console.log('🎨 Loading sample gallery for new user (in-memory only)...');
       if (!silent) {
-        setCloudSyncProgress('Creating sample gallery for tutorial...');
+        setCloudSyncProgress('Loading sample gallery for tutorial...');
       }
 
       const sampleGallery = await buildSampleGallery();
@@ -234,69 +240,28 @@ export default function PhotographyPoseGuide() {
         return;
       }
 
-      // Create category locally
+      // Add category to React state only (not persisted to IndexedDB or cloud)
+      // The isSampleGallery flag marks it for special handling
       const localSettings = {
         cover: sampleGallery.cover,
         notes: sampleGallery.notes,
         tags: sampleGallery.tags,
         isPrivate: sampleGallery.isPrivate,
+        isSampleGallery: true, // Mark as sample gallery
       };
       addCategory(sampleGallery.name, localSettings);
 
-      // Create category in Supabase
-      const categoryData = {
-        name: sampleGallery.name,
-        notes: sampleGallery.notes,
-        isFavorite: sampleGallery.isFavorite,
-        isPrivate: sampleGallery.isPrivate,
-        galleryPassword: null,
-      };
+      // Wait for state to update
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      const supabaseResult = await createCategoryInSupabase(categoryData, userId);
-
-      if (supabaseResult.ok) {
-        // Find the local category and update with supabaseUid
-        // Need to wait a tick for React state to update
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        const addedCat = categoriesRef.current.find(c => c.name === sampleGallery.name && !c.supabaseUid);
-        if (addedCat) {
-          updateCategory(addedCat.id, { supabaseUid: supabaseResult.uid });
-
-          // Sync category tags (await to ensure they're created)
-          if (sampleGallery.tags && sampleGallery.tags.length > 0) {
-            console.log('[SampleGallery] Syncing category tags:', sampleGallery.tags);
-            const tagResult = await syncCategoryTags(supabaseResult.uid, sampleGallery.tags, userId);
-            console.log('[SampleGallery] Category tags sync result:', tagResult);
-          }
-
-          // Add images locally
-          addImages(addedCat.id, sampleGallery.images);
-
-          // Wait for state to update before uploading
-          await new Promise(resolve => setTimeout(resolve, 100));
-
-          // Generate filenames for R2 upload
-          const filenames = sampleGallery.images.map((img, idx) =>
-            `sample-family-pose-${String(idx + 1).padStart(2, '0')}.webp`
-          );
-
-          // Upload images to R2 in background
-          if (accessToken) {
-            console.log('🎨 Uploading sample gallery images to cloud...');
-            uploadImagesToR2InBackground(addedCat.id, sampleGallery.images, filenames, 0);
-          }
-
-          // Mark sample gallery as created so we don't create it again
-          const setResult = await setUserSetting(userId, 'sample_gallery_created', 'true');
-          console.log('[SampleGallery] Flag set result:', setResult);
-          console.log('🎨 Sample gallery created successfully');
-        }
-      } else {
-        console.error('[SampleGallery] Failed to create in Supabase:', supabaseResult.error);
+      // Find the added category and add images
+      const addedCat = categoriesRef.current.find(c => c.isSampleGallery);
+      if (addedCat) {
+        addImages(addedCat.id, sampleGallery.images);
+        console.log('🎨 Sample gallery loaded successfully (in-memory only, not synced to cloud)');
       }
     } catch (error) {
-      console.error('[SampleGallery] Error seeding sample gallery:', error);
+      console.error('[SampleGallery] Error loading sample gallery:', error);
     }
   };
 
@@ -359,7 +324,7 @@ export default function PhotographyPoseGuide() {
         }
 
         // Check if sample gallery should be created (runs regardless of existing categories)
-        await seedSampleGalleryIfNeeded(userId, accessToken, silent);
+        await seedSampleGalleryIfNeeded(userId, silent);
 
         setHasSyncedOnce(true);
         setIsCloudSyncing(false);
@@ -423,7 +388,7 @@ export default function PhotographyPoseGuide() {
       }
 
       // Check if sample gallery should be created (runs regardless of existing categories)
-      await seedSampleGalleryIfNeeded(userId, accessToken, silent);
+      await seedSampleGalleryIfNeeded(userId, silent);
 
       setHasSyncedOnce(true);
       setIsCloudSyncing(false);
@@ -1704,6 +1669,29 @@ export default function PhotographyPoseGuide() {
   const deleteCategoryWithSync = async (categoryId) => {
     const cat = categoriesRef.current.find(c => c.id === categoryId);
     const userId = session?.user?.id;
+
+    // Handle sample gallery deletion specially - it's in-memory only
+    if (cat?.isSampleGallery) {
+      console.log('[SampleGallery] Dismissing sample gallery');
+
+      // Set dismissed flag in Supabase so it won't reappear on other devices
+      if (userId) {
+        setUserSetting(userId, 'sample_gallery_dismissed', 'true')
+          .then(result => {
+            if (result.ok) {
+              console.log('[SampleGallery] Dismissed flag set successfully');
+            } else {
+              console.error('[SampleGallery] Failed to set dismissed flag:', result.error);
+            }
+          })
+          .catch(err => console.error('[SampleGallery] Error setting dismissed flag:', err));
+      }
+
+      // Just remove from React state - no IndexedDB or cloud cleanup needed
+      deleteCategory(categoryId);
+      console.log('[SampleGallery] Sample gallery dismissed');
+      return;
+    }
 
     if (cat && userId) {
       // Delete cover photo from R2 if it exists

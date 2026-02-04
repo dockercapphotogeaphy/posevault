@@ -119,10 +119,8 @@ export async function buildSampleGallery() {
         tags: img.tags,
         isFavorite: img.isFavorite,
         dateAdded: new Date().toISOString(),
-        // These will be set during sync
-        r2Key: null,
-        r2Status: 'pending',
-        size: 0, // Will be calculated from blob
+        // Sample gallery is in-memory only - no cloud storage
+        isSampleImage: true,
       };
     })
   );
@@ -144,5 +142,7 @@ export async function buildSampleGallery() {
     cover: coverDataUrl,
     coverTags: cover.tags,
     images: validImages,
+    // Mark as sample gallery for special handling (in-memory only, no cloud sync)
+    isSampleGallery: true,
   };
 }

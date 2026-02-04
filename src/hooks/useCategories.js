@@ -22,7 +22,10 @@ export const useCategories = (currentUser) => {
 
   // Debounced save - prevents multiple rapid saves during uploads
   useEffect(() => {
-    if (!isLoading && categories.length > 0 && currentUser) {
+    // Filter out sample galleries - they are in-memory only and should not be persisted
+    const persistableCategories = categories.filter(c => !c.isSampleGallery);
+
+    if (!isLoading && persistableCategories.length > 0 && currentUser) {
       // Clear any pending save
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
@@ -30,9 +33,8 @@ export const useCategories = (currentUser) => {
 
       // Debounce: wait 500ms after last change before saving
       // Capture categories in the closure to avoid stale data
-      const categoriesToSave = categories;
       saveTimeoutRef.current = setTimeout(() => {
-        saveToStorage(categoriesToSave);
+        saveToStorage(persistableCategories);
       }, 500);
     }
 
@@ -257,7 +259,9 @@ export const useCategories = (currentUser) => {
     }
 
     // Use ref to get the absolute latest categories, even if state hasn't updated yet
-    await saveToStorage(latestCategoriesRef.current);
+    // Filter out sample galleries - they are in-memory only
+    const persistableCategories = latestCategoriesRef.current.filter(c => !c.isSampleGallery);
+    await saveToStorage(persistableCategories);
   };
 
   return {
