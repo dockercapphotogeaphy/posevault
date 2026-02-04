@@ -211,13 +211,20 @@ export default function PhotographyPoseGuide() {
   // ==========================================
   const seedSampleGalleryIfNeeded = async (userId, silent = false) => {
     try {
-      // Check if user has dismissed the sample gallery
-      const dismissedResult = await getUserSetting(userId, 'sample_gallery_dismissed');
-      console.log('[SampleGallery] Dismissed flag check result:', dismissedResult);
-      const isDismissed = dismissedResult?.ok ? dismissedResult.value : null;
+      // Check if user has dismissed the sample gallery (new flag)
+      // OR if they already had it created before this refactor (old flag for backwards compatibility)
+      const [dismissedResult, createdResult] = await Promise.all([
+        getUserSetting(userId, 'sample_gallery_dismissed'),
+        getUserSetting(userId, 'sample_gallery_created'),
+      ]);
 
-      if (isDismissed === 'true' || isDismissed === true) {
-        console.log('[SampleGallery] Sample gallery was dismissed, skipping');
+      console.log('[SampleGallery] Flag check - dismissed:', dismissedResult, 'created:', createdResult);
+
+      const isDismissed = dismissedResult?.ok && (dismissedResult.value === 'true' || dismissedResult.value === true);
+      const wasCreatedBefore = createdResult?.ok && (createdResult.value === 'true' || createdResult.value === true);
+
+      if (isDismissed || wasCreatedBefore) {
+        console.log('[SampleGallery] Sample gallery was dismissed or already created before, skipping');
         return;
       }
 
@@ -240,26 +247,21 @@ export default function PhotographyPoseGuide() {
         return;
       }
 
-      // Add category to React state only (not persisted to IndexedDB or cloud)
-      // The isSampleGallery flag marks it for special handling
-      const localSettings = {
+      console.log(`[SampleGallery] Built gallery with ${sampleGallery.images.length} images`);
+
+      // Add category with images directly to React state (not persisted to IndexedDB or cloud)
+      // Pass images directly to avoid race condition with separate addImages call
+      addCategory(sampleGallery.name, {
         cover: sampleGallery.cover,
         notes: sampleGallery.notes,
         tags: sampleGallery.tags,
         isPrivate: sampleGallery.isPrivate,
-        isSampleGallery: true, // Mark as sample gallery
-      };
-      addCategory(sampleGallery.name, localSettings);
+        isFavorite: sampleGallery.isFavorite,
+        images: sampleGallery.images,
+        isSampleGallery: true,
+      });
 
-      // Wait for state to update
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Find the added category and add images
-      const addedCat = categoriesRef.current.find(c => c.isSampleGallery);
-      if (addedCat) {
-        addImages(addedCat.id, sampleGallery.images);
-        console.log('🎨 Sample gallery loaded successfully (in-memory only, not synced to cloud)');
-      }
+      console.log('🎨 Sample gallery loaded successfully (in-memory only, not synced to cloud)');
     } catch (error) {
       console.error('[SampleGallery] Error loading sample gallery:', error);
     }

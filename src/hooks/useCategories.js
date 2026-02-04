@@ -114,12 +114,13 @@ export const useCategories = (currentUser) => {
         id: newId,
         name: name,
         cover: privateSettings.cover || null,
-        images: [],
-        isFavorite: false,
+        images: privateSettings.images || [],
+        isFavorite: privateSettings.isFavorite || false,
         notes: privateSettings.notes || '',
         tags: privateSettings.tags || [],
         isPrivate: privateSettings.isPrivate || false,
         privatePassword: privateSettings.privatePassword || null,
+        isSampleGallery: privateSettings.isSampleGallery || false,
       }];
     });
   };
