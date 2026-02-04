@@ -2494,8 +2494,8 @@ export default function PhotographyPoseGuide() {
         />
       )}
 
-      {/* Tutorial Overlay */}
-      {!tutorialLoading && (
+      {/* Tutorial Overlay - wait for sync to complete so sample gallery is loaded */}
+      {!tutorialLoading && hasSyncedOnce && (
         <Joyride
           steps={tutorialSteps}
           run={runTutorial}
