@@ -79,6 +79,7 @@ export default function PhotographyPoseGuide() {
     toggleCategoryFavorite,
     addImages,
     updateImage,
+    updateImageByLocalId,
     deleteImage,
     bulkUpdateImages,
     bulkDeleteImages,
@@ -332,6 +333,12 @@ export default function PhotographyPoseGuide() {
 
       const { categories: supabaseCategories, images: supabaseImages, imageTagsLookup } = cloudData;
 
+      // Diagnostic: log image counts from cloud vs local
+      const localImageCount = categoriesRef.current.reduce((sum, c) => sum + (c.images?.length || 0), 0);
+      const localWithUid = categoriesRef.current.reduce((sum, c) => sum + (c.images?.filter(i => i.supabaseUid)?.length || 0), 0);
+      const localWithR2Key = categoriesRef.current.reduce((sum, c) => sum + (c.images?.filter(i => i.r2Key)?.length || 0), 0);
+      console.log(`📊 Sync diagnostic: ${localImageCount} local images (${localWithUid} with supabaseUid, ${localWithR2Key} with r2Key), ${supabaseImages.length} cloud images`);
+
       // Group images by category_uid
       const imagesByCategoryUid = {};
       for (const img of supabaseImages) {
@@ -343,9 +350,11 @@ export default function PhotographyPoseGuide() {
 
       if (!hasLocalData) {
         // ---- FRESH SYNC: No local data, pull everything from cloud ----
+        console.log('📊 Using FULL CLOUD PULL (no local data)');
         await fullCloudPull(supabaseCategories, imagesByCategoryUid, imageTagsLookup, accessToken, silent);
       } else {
         // ---- INCREMENTAL MERGE: Merge cloud changes into existing local data ----
+        console.log('📊 Using INCREMENTAL MERGE (has local data)');
         await mergeCloudIntoLocal(supabaseCategories, supabaseImages, imagesByCategoryUid, imageTagsLookup, accessToken, userId, silent);
       }
 
@@ -581,10 +590,12 @@ export default function PhotographyPoseGuide() {
       }));
 
       let coverSrc = null;
+      let coverR2Key = null;
       if (cat.cover_image_uid) {
         const coverLocal = localImages.find(li => li.supabaseUid === cat.cover_image_uid);
         if (coverLocal) {
           coverSrc = coverLocal.src;
+          coverR2Key = coverLocal.r2Key || null;
         }
       }
 
@@ -593,6 +604,7 @@ export default function PhotographyPoseGuide() {
         name: cat.name,
         cover: coverSrc,
         coverImageUid: cat.cover_image_uid || null,
+        coverR2Key,
         coverPositionY: cat.cover_position_y ?? 50,
         images: localImages,
         isFavorite: cat.favorite || false,
@@ -668,9 +680,13 @@ export default function PhotographyPoseGuide() {
       }));
 
       let coverSrc = null;
+      let coverR2Key = null;
       if (cloudCat.cover_image_uid) {
         const coverLocal = localImages.find(li => li.supabaseUid === cloudCat.cover_image_uid);
-        if (coverLocal) coverSrc = coverLocal.src;
+        if (coverLocal) {
+          coverSrc = coverLocal.src;
+          coverR2Key = coverLocal.r2Key || null;
+        }
       }
 
       updatedCategories.push({
@@ -678,6 +694,7 @@ export default function PhotographyPoseGuide() {
         name: cloudCat.name,
         cover: coverSrc,
         coverImageUid: cloudCat.cover_image_uid || null,
+        coverR2Key,
         coverPositionY: cloudCat.cover_position_y ?? 50,
         images: localImages,
         isFavorite: cloudCat.favorite || false,
@@ -704,7 +721,28 @@ export default function PhotographyPoseGuide() {
       if ((cloudCat.favorite || false) !== localCat.isFavorite) catUpdates.isFavorite = cloudCat.favorite || false;
       if ((cloudCat.private_gallery || false) !== localCat.isPrivate) catUpdates.isPrivate = cloudCat.private_gallery || false;
       if ((cloudCat.gallery_password || null) !== localCat.privatePassword) catUpdates.privatePassword = cloudCat.gallery_password || null;
-      if ((cloudCat.cover_image_uid || null) !== localCat.coverImageUid) catUpdates.coverImageUid = cloudCat.cover_image_uid || null;
+      if ((cloudCat.cover_image_uid || null) !== localCat.coverImageUid) {
+        catUpdates.coverImageUid = cloudCat.cover_image_uid || null;
+        // Resolve cover src from local images when coverImageUid changes
+        if (cloudCat.cover_image_uid) {
+          const coverImg = localCat.images.find(img => img.supabaseUid === cloudCat.cover_image_uid);
+          if (coverImg?.src) {
+            catUpdates.cover = coverImg.src;
+            catUpdates.coverR2Key = coverImg.r2Key || null;
+          }
+        } else {
+          catUpdates.cover = null;
+          catUpdates.coverR2Key = null;
+        }
+      } else if (cloudCat.cover_image_uid && !localCat.cover) {
+        // Re-resolve cover src when coverImageUid matches but cover is missing
+        // (e.g., R2 fetch failed on previous sync)
+        const coverImg = localCat.images.find(img => img.supabaseUid === cloudCat.cover_image_uid);
+        if (coverImg?.src) {
+          catUpdates.cover = coverImg.src;
+          catUpdates.coverR2Key = coverImg.r2Key || null;
+        }
+      }
       if ((cloudCat.cover_position_y ?? 50) !== (localCat.coverPositionY ?? 50)) catUpdates.coverPositionY = cloudCat.cover_position_y ?? 50;
 
       if (Object.keys(catUpdates).length > 0) {
@@ -797,14 +835,43 @@ export default function PhotographyPoseGuide() {
     }
 
     // ---- 4. Remove locally-synced images that were deleted in cloud ----
+    // IMPORTANT: Only remove images that were truly deleted in cloud (no local data).
+    // Images with valid R2 data (r2Key) whose supabaseUid is missing from cloud
+    // should NOT be deleted — their Supabase record likely failed to create.
+    // Instead, clear their supabaseUid so retryFailedUploads can re-create it.
     const finalCategories = filtered.map(cat => {
       if (!cat.supabaseUid) return cat;
       const originalLen = cat.images.length;
-      const filteredImages = cat.images.filter(img => {
-        if (!img.supabaseUid) return true;
-        return cloudImageUids.has(img.supabaseUid);
-      });
-      if (filteredImages.length !== originalLen) {
+      let imagesModified = false;
+      const filteredImages = [];
+      for (const img of cat.images) {
+        if (!img.supabaseUid) {
+          // Local-only image, always keep
+          filteredImages.push(img);
+          continue;
+        }
+        if (cloudImageUids.has(img.supabaseUid)) {
+          // Exists in cloud, keep as-is
+          filteredImages.push(img);
+          continue;
+        }
+        // supabaseUid not found in cloud — was it truly deleted, or did the record fail to create?
+        if (img.r2Key) {
+          // Image has valid R2 data — don't delete it. Clear its supabaseUid so
+          // retryFailedUploads will re-create the missing Supabase record.
+          console.warn(
+            `Merge: image in "${cat.name}" has r2Key (${img.r2Key}) but supabaseUid ` +
+            `(${img.supabaseUid}) not found in cloud. Clearing UID for retry instead of deleting.`
+          );
+          filteredImages.push({ ...img, supabaseUid: null, r2Status: 'uploaded' });
+          imagesModified = true;
+          continue;
+        }
+        // No r2Key and not in cloud — genuinely deleted, remove it
+        console.log(`Merge: removing image from "${cat.name}" — deleted in cloud (uid: ${img.supabaseUid})`);
+        imagesModified = true;
+      }
+      if (imagesModified || filteredImages.length !== originalLen) {
         changed = true;
         return { ...cat, images: filteredImages };
       }
@@ -1357,6 +1424,7 @@ export default function PhotographyPoseGuide() {
           });
 
           images.push({
+            localId: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
             src: optimizedDataUrl,
             isFavorite: false,
             tags: [],
@@ -1378,6 +1446,7 @@ export default function PhotographyPoseGuide() {
           });
 
           images.push({
+            localId: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
             src: reader,
             isFavorite: false,
             tags: [],
@@ -1390,12 +1459,17 @@ export default function PhotographyPoseGuide() {
         }
       }
 
-      // Capture the current image count BEFORE adding (for correct R2 upload indexing)
-      const existingCat = categoriesRef.current.find(c => c.id === categoryId);
-      const startIndex = existingCat ? existingCat.images.length : 0;
+      // Capture localIds for stable background upload references (immune to index shifts)
+      const localIds = images.map(img => img.localId);
 
       // Add all processed images to local storage first (fast)
       addImages(categoryId, images);
+
+      // Persist to IndexedDB immediately so all images survive a page refresh.
+      // The debounced save can't be relied on here because the background upload
+      // workers start updating state immediately, which keeps rescheduling the
+      // debounced timeout — so it never fires during active uploads.
+      await forceSave();
 
       // Show completion state for local storage
       setUploadComplete(true);
@@ -1408,7 +1482,7 @@ export default function PhotographyPoseGuide() {
 
       // Upload to R2 in background (don't block UI)
       if (session?.access_token) {
-        uploadImagesToR2InBackground(categoryId, images, filenames, startIndex);
+        uploadImagesToR2InBackground(categoryId, images, filenames, localIds);
       } else {
         console.warn('No session - skipping R2 upload');
       }
@@ -1443,17 +1517,18 @@ export default function PhotographyPoseGuide() {
     }
   };
 
-  const uploadImagesToR2InBackground = async (categoryId, images, filenames, startIndex) => {
+  const uploadImagesToR2InBackground = async (categoryId, images, filenames, localIds) => {
     const userId = session?.user?.id;
     const CONCURRENCY = 3;
+    let completedCount = 0;
 
     // Process a single image: upload to R2, create Supabase record
     const processImage = async (i) => {
-      const imageIndex = startIndex + i;
+      const localId = localIds[i];
 
       try {
-        // Update status to uploading
-        updateImage(categoryId, imageIndex, { r2Status: 'uploading' });
+        // Update status to uploading (by stable localId, immune to index shifts)
+        updateImageByLocalId(categoryId, localId, { r2Status: 'uploading' });
 
         // Use fresh access token from session ref to avoid stale tokens
         const currentToken = session?.access_token;
@@ -1465,7 +1540,7 @@ export default function PhotographyPoseGuide() {
 
         if (result.ok) {
           // Update local with R2 key and file size
-          updateImage(categoryId, imageIndex, {
+          updateImageByLocalId(categoryId, localId, {
             r2Key: result.key,
             r2Status: 'uploaded',
             size: result.size || 0
@@ -1496,7 +1571,7 @@ export default function PhotographyPoseGuide() {
             if (supabaseResult.ok) {
               // Get current image state to check if user has customized the name
               const currentCategory = categoriesRef.current.find(c => c.id === categoryId);
-              const currentImage = currentCategory?.images[imageIndex];
+              const currentImage = currentCategory?.images?.find(img => img.localId === localId);
               const originalFilename = filenames[i];
               const currentPoseName = currentImage?.poseName;
 
@@ -1505,7 +1580,7 @@ export default function PhotographyPoseGuide() {
 
               if (hasCustomName) {
                 // User has customized the name, just store the UID
-                updateImage(categoryId, imageIndex, {
+                updateImageByLocalId(categoryId, localId, {
                   supabaseUid: supabaseResult.uid
                 });
                 console.log(`Supabase image created: ${supabaseResult.uid}, keeping user name: ${currentPoseName}`);
@@ -1514,7 +1589,7 @@ export default function PhotographyPoseGuide() {
                 const friendlyName = `${currentCategory?.name || 'Image'} - ${supabaseResult.uid}`;
 
                 // Store the Supabase UID and friendly poseName locally
-                updateImage(categoryId, imageIndex, {
+                updateImageByLocalId(categoryId, localId, {
                   supabaseUid: supabaseResult.uid,
                   poseName: friendlyName
                 });
@@ -1531,12 +1606,18 @@ export default function PhotographyPoseGuide() {
             }
           }
         } else {
-          updateImage(categoryId, imageIndex, { r2Status: 'failed' });
+          updateImageByLocalId(categoryId, localId, { r2Status: 'failed' });
           console.error(`R2 upload failed for image ${i + 1} after retries:`, result.error);
         }
       } catch (err) {
-        updateImage(categoryId, imageIndex, { r2Status: 'failed' });
+        updateImageByLocalId(categoryId, localId, { r2Status: 'failed' });
         console.error(`R2 upload error for image ${i + 1}:`, err);
+      } finally {
+        completedCount++;
+        // Periodic save every 5 images to prevent data loss on crash/tab close
+        if (completedCount % 5 === 0) {
+          forceSave().catch(err => console.warn('Periodic save failed:', err));
+        }
       }
     };
 
@@ -1551,12 +1632,15 @@ export default function PhotographyPoseGuide() {
     const workers = Array.from({ length: Math.min(CONCURRENCY, images.length) }, () => runWorker());
     await Promise.all(workers);
 
-    // Force save to IndexedDB after all uploads complete to prevent data loss
+    // Final save to IndexedDB after all uploads complete
     await forceSave();
     console.log(`Background R2 upload complete: ${images.length} images processed`);
   };
 
-  // Retry any images stuck in 'failed' or 'pending' r2Status that have local src data
+  // Retry any images that need R2 upload or Supabase record creation.
+  // Handles two cases:
+  //   1. Images with src but no r2Key (failed/pending R2 upload)
+  //   2. Images with r2Key but no supabaseUid (R2 succeeded, Supabase create failed)
   const retryFailedUploads = async () => {
     const userId = session?.user?.id;
     const accessToken = session?.access_token;
@@ -1571,10 +1655,54 @@ export default function PhotographyPoseGuide() {
       for (let imgIdx = 0; imgIdx < cat.images.length; imgIdx++) {
         const img = cat.images[imgIdx];
 
-        // Skip images that are already uploaded or have no local data to upload
-        if (!img.src || img.r2Status === 'uploaded' || img.r2Status === 'uploading') continue;
         // Skip sample images — these are promoted separately by promoteSampleGallery
         if (img.r2Status === 'sample') continue;
+        // Skip images currently being uploaded
+        if (img.r2Status === 'uploading') continue;
+
+        // Case 2: R2 uploaded but Supabase record missing — just create the record
+        if (img.r2Key && !img.supabaseUid && img.r2Status === 'uploaded') {
+          const categorySupabaseUid = categoriesRef.current.find(c => c.id === cat.id)?.supabaseUid;
+          if (!categorySupabaseUid) continue;
+
+          retried++;
+          console.log(`Creating missing Supabase record for image ${imgIdx} in "${cat.name}" (r2Key: ${img.r2Key})`);
+
+          try {
+            const supabaseResult = await createImageInSupabase(
+              {
+                r2Key: img.r2Key,
+                size: img.size || 0,
+                poseName: img.poseName || `image-${imgIdx}`,
+                notes: img.notes || '',
+                isFavorite: img.isFavorite || false,
+              },
+              categorySupabaseUid,
+              userId
+            );
+
+            if (supabaseResult.ok) {
+              const friendlyName = img.poseName || `${cat.name || 'Image'} - ${supabaseResult.uid}`;
+              updateImage(cat.id, imgIdx, {
+                supabaseUid: supabaseResult.uid,
+                poseName: friendlyName
+              });
+              console.log(`Supabase record recovered: ${supabaseResult.uid} for r2Key ${img.r2Key}`);
+
+              updateImageInSupabase(supabaseResult.uid, { poseName: friendlyName }, userId);
+              updateUserStorage(userId, img.size || 0);
+            } else {
+              console.error('Supabase recovery create failed:', supabaseResult.error);
+            }
+          } catch (err) {
+            console.error(`Supabase recovery error for image ${imgIdx} in "${cat.name}":`, err);
+          }
+          continue;
+        }
+
+        // Case 1: No R2 key — needs full upload
+        // Skip images that are already uploaded or have no local data to upload
+        if (!img.src || img.r2Status === 'uploaded') continue;
         // Only retry images that failed or are still pending (have src but no r2Key)
         if (img.r2Key) continue;
 
